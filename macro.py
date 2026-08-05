@@ -760,8 +760,9 @@ class MacroApp:
                 self._set_update_text("확인 실패: %s" % info["error"], WARN)
             return
         if not updater.is_newer(info["version"], APP_VER):
-            if not quiet:
-                self._set_update_text("최신 버전입니다", OK)
+            # 자동 확인이었어도 결과는 남겨 둔다 (확인이 됐는지 알 수 있게)
+            self._set_update_text("최신 버전입니다  (%s 확인)" % time.strftime("%H:%M"),
+                                  TXT_MUTE if quiet else OK)
             return
 
         self._update_info = info
