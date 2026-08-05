@@ -1,0 +1,13 @@
+# 빌드 산출물
+build/
+dist/
+배포/
+*.spec
+
+# 사용자 데이터 (기록한 매크로에는 실제 입력이 담기므로 올리지 않는다)
+macros/
+config.json
+
+# 파이썬
+__pycache__/
+*.pyc
