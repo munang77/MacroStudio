@@ -141,13 +141,20 @@ class Runner:
             time.sleep(min(0.01, max(0.001, seconds)))
         return not self._stop.is_set()
 
+    MIN_STEP = 0.005                 # 블록 한 칸의 최소 시간 (쉼 없는 조합이 CPU 를 태우지 않게)
+
     def _run(self, steps, loops):
         i = 0
         try:
             while not self._stop.is_set():
                 if self.on_step:
                     self.on_step(i, self.cycles)
+                began = time.perf_counter()
                 nxt = self._exec(steps[i], i)
+                # 대기가 없는 블록(색이면 → 처음으로 같은 조합)만 돌면 쉬지 않고 도니 바닥을 깐다
+                spent = time.perf_counter() - began
+                if nxt is not None and spent < self.MIN_STEP:
+                    self._sleep(self.MIN_STEP - spent)
                 if nxt is None:                    # 정지 요청
                     break
                 i = nxt

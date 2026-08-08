@@ -1,4 +1,4 @@
-# MacroStudio v2.3
+# MacroStudio v2.3.1
 
 윈도우용 마우스/키보드 매크로 프로그램. 파이썬 + tkinter + pynput + Pillow.
 

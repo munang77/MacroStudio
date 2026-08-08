@@ -34,7 +34,7 @@ from ui_kit import (ACCENT, BG, CARD, DANGER, FIELD, LINE, MONO, OK, SIDE, TXT,
                     Segmented, Slider, StatusPill, Stepper, TextField, Toggle)
 
 APP_NAME = "MacroStudio"
-APP_VER = "2.3"
+APP_VER = "2.3.1"
 FROZEN = getattr(sys, "frozen", False)         # exe 로 묶인 상태인지
 
 if FROZEN:
@@ -133,6 +133,7 @@ class MacroApp:
         self.sender = Sender()           # 실제 마우스/키보드와 같은 경로로 입력을 보낸다
         self.mouse_ctl = mouse.Controller()      # 좌표 읽기용
         self._last_tick = 0.0
+        self._last_creator_tick = 0.0
 
         self.hotkeys = dict(DEFAULT_HOTKEYS)      # 설정이 일부만 있어도 나머지는 기본값
         saved = self.cfg.get("hotkeys")
@@ -156,7 +157,7 @@ class MacroApp:
         self.creator_runner = builder.Runner(
             self.sender, self.log,
             lambda: self.msgq.put(("creator_done", None)),
-            on_step=lambda i, c: self.msgq.put(("creator_step", (i, c))),
+            on_step=self._creator_tick,
             play_macro=self._creator_play_macro)
 
         self._capture_listener = None
@@ -884,6 +885,14 @@ class MacroApp:
         self.txt_log.configure(state="normal")
         self.txt_log.delete("1.0", "end")
         self.txt_log.configure(state="disabled")
+
+    def _creator_tick(self, index, cycles):
+        """블록마다 화면을 갱신하면 빠른 창작에서 큐가 넘친다. 첫 칸과 0.12초 간격만."""
+        now = time.time()
+        if index != 0 and now - self._last_creator_tick < 0.12:
+            return
+        self._last_creator_tick = now
+        self.msgq.put(("creator_step", (index, cycles)))
 
     def _tick(self, which, count, cycles=None):
         now = time.time()

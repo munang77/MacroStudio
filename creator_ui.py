@@ -480,7 +480,11 @@ class CreatorPage:
                                  fg=TXT_MUTE)
 
     def on_step(self, index, cycles):
-        self.refresh(index)
+        # 목록을 통째로 다시 그리면 빠른 블록에서 화면이 버벅인다. 선택 표시만 옮긴다
+        if 0 <= index < self.lst.size():
+            self.lst.selection_clear(0, "end")
+            self.lst.selection_set(index)
+            self.lst.see(index)
         self.lbl_state.configure(text="실행 중  %d번 블록  %d바퀴" % (index + 1, cycles), fg=OK)
 
     # ------------------------------------------------------------ 파일
