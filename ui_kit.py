@@ -175,6 +175,14 @@ def icon(name, size, color, bg):
     elif name == "folder":
         d.rounded_rectangle([S * 0.1, S * 0.26, S * 0.9, S * 0.82], radius=S * 0.1, fill=color)
         d.rounded_rectangle([S * 0.1, S * 0.18, S * 0.45, S * 0.34], radius=S * 0.06, fill=color)
+    elif name == "blocks":
+        d.rounded_rectangle([S * 0.08, S * 0.12, S * 0.62, S * 0.36], radius=S * 0.06, fill=color)
+        d.rounded_rectangle([S * 0.24, S * 0.4, S * 0.78, S * 0.64], radius=S * 0.06, fill=color)
+        d.rounded_rectangle([S * 0.08, S * 0.68, S * 0.5, S * 0.92], radius=S * 0.06, fill=color)
+    elif name == "plus":
+        w = S * 0.09
+        d.rounded_rectangle([S * 0.5 - w, S * 0.2, S * 0.5 + w, S * 0.8], radius=w, fill=color)
+        d.rounded_rectangle([S * 0.2, S * 0.5 - w, S * 0.8, S * 0.5 + w], radius=w, fill=color)
     elif name == "chevron":
         d.line([(S * 0.3, S * 0.42), (S * 0.5, S * 0.62), (S * 0.7, S * 0.42)],
                fill=color, width=int(S * 0.09), joint="curve")

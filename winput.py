@@ -183,6 +183,22 @@ def vk_for_char(ch):
     return None if res == -1 else (res & 0xFF)
 
 
+def pixel_color(x, y):
+    """화면 그 지점의 색 (r, g, b). 못 읽으면 None."""
+    if not AVAILABLE:
+        return None
+    hdc = _user32.GetDC(0)
+    if not hdc:
+        return None
+    try:
+        val = ctypes.windll.gdi32.GetPixel(hdc, int(x), int(y))
+        if val == 0xFFFFFFFF:            # CLR_INVALID
+            return None
+        return (val & 0xFF, (val >> 8) & 0xFF, (val >> 16) & 0xFF)
+    finally:
+        _user32.ReleaseDC(0, hdc)
+
+
 def cursor_pos():
     pt = wintypes.POINT()
     if AVAILABLE and _user32.GetCursorPos(ctypes.byref(pt)):

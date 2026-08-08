@@ -22,8 +22,10 @@ from tkinter import filedialog, messagebox
 
 from pynput import keyboard, mouse
 
+import builder
 import ui_kit as ui
 import updater
+from creator_ui import CreatorPage
 from core import (BUTTONS, MOD_KEYS, Player, Recorder, RepeatWorker, Sender,
                   SequenceWorker, canon_name, current_mods, hotkey_label, hotkey_token,
                   is_pressed, make_spec, mouse_token, parse_combo, spec_main, spec_mods)
@@ -32,7 +34,7 @@ from ui_kit import (ACCENT, BG, CARD, DANGER, FIELD, LINE, MONO, OK, SIDE, TXT,
                     Segmented, Slider, StatusPill, Stepper, TextField, Toggle)
 
 APP_NAME = "MacroStudio"
-APP_VER = "2.2"
+APP_VER = "2.3"
 FROZEN = getattr(sys, "frozen", False)         # exe 로 묶인 상태인지
 
 if FROZEN:
@@ -44,14 +46,15 @@ else:
     DATA_DIR = APP_DIR
 
 MACRO_DIR = os.path.join(DATA_DIR, "macros")
+CREATION_DIR = os.path.join(DATA_DIR, "creations")
 CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 WINDOW_TITLE = "%s - 매크로 프로그램" % APP_NAME
 
 HOTKEY_ACTIONS = [("record", "기록 시작 / 중지"), ("play", "재생 시작 / 중지"),
                   ("click", "자동 클릭 켜기 / 끄기"), ("keyrep", "키 연타 켜기 / 끄기"),
-                  ("stop", "전체 정지")]
+                  ("build", "창작 시작 / 정지"), ("stop", "전체 정지")]
 DEFAULT_HOTKEYS = {"record": "F6", "play": "F7", "click": "F8",
-                   "keyrep": "F9", "stop": "ESC"}
+                   "keyrep": "F9", "build": "F10", "stop": "ESC"}
 CAPTURE_TIMEOUT = 6.0        # 단축키 입력 대기 시간(초)
 MAX_KEY_ROWS = 6             # 키 연타에 넣을 수 있는 키 개수
 
@@ -59,6 +62,7 @@ PAGES = [
     ("record", "기록 / 재생", "record", "마우스와 키보드 동작을 그대로 담아 반복합니다"),
     ("click", "자동 클릭", "mouse", "원하는 간격으로 마우스를 자동으로 클릭합니다"),
     ("key", "키 연타", "keyboard", "키 하나 또는 여러 키를 순서대로 반복 입력합니다"),
+    ("build", "창작", "blocks", "블록을 조립해 나만의 매크로를 만듭니다"),
     ("set", "설정", "gear", "전역 단축키를 바꾸고 사용법을 확인합니다"),
 ]
 
@@ -147,6 +151,14 @@ class MacroApp:
                                     lambda n: self._tick("click", n))
         self.repeater = SequenceWorker(self.log, lambda: self.msgq.put(("keyrep_done", None)),
                                        lambda n, c: self._tick("keyrep", n, c))
+        self.macro_dir = MACRO_DIR
+        self.icon_path = resource("icon.ico")
+        self.creator_runner = builder.Runner(
+            self.sender, self.log,
+            lambda: self.msgq.put(("creator_done", None)),
+            on_step=lambda i, c: self.msgq.put(("creator_step", (i, c))),
+            play_macro=self._creator_play_macro)
+
         self._capture_listener = None
         self._cap_target = None          # 키 캡처 중인 행
         self._hk_mods = set()            # 현재 눌려 있는 보조키
@@ -243,10 +255,12 @@ class MacroApp:
         self.pagebox = tk.Frame(main, bg=BG)
         self.pagebox.pack(fill="both", expand=True, padx=26, pady=(18, 0))
 
+        self.creator = CreatorPage(self, self.pagebox, CREATION_DIR)
         self.pages = {
             "record": self._page_record(),
             "click": self._page_click(),
             "key": self._page_key(),
+            "build": self.creator.frame,
             "set": self._page_settings(),
         }
         self.current = None
@@ -311,6 +325,31 @@ class MacroApp:
         self.txt_log.tag_configure("err", foreground=DANGER)
 
     # ------------------------------------------------------------ 작은 도우미
+    def hotkey_hint(self, action):
+        """버튼 위 작은 칩에 넣을 단축키 이름."""
+        return hotkey_label(self.hotkeys.get(action, "없음"), short=True)
+
+    def _creator_play_macro(self, name):
+        """창작 블록에서 기록해 둔 매크로를 불러 재생한다 (끝날 때까지 기다림)."""
+        path = os.path.join(MACRO_DIR, (name or "").strip() + ".json")
+        try:
+            with open(path, "r", encoding="utf-8") as fp:
+                data = json.load(fp)
+            events = data["events"] if isinstance(data, dict) else data
+        except Exception as exc:
+            self.log("매크로를 열 수 없습니다: %s (%s)" % (name, exc), "err")
+            return False
+        sub = Player(lambda m, kind="msg": None, lambda: None)
+        sub.sender = self.sender
+        sub.smooth = self.tg_smooth.get()
+        sub.start(events, 1, self.sl_speed.get(), 0)
+        while sub.running:
+            if self.creator_runner._stop.is_set():
+                sub.stop()
+                break
+            time.sleep(0.02)
+        return True
+
     def _card(self, parent, title, sub=None, icon_name=None, expand=False):
         card = Card(parent, bg=CARD, outer=BG, pad=18)
         card.pack(fill="both" if expand else "x", expand=expand, pady=(0, 12))
@@ -862,6 +901,8 @@ class MacroApp:
             self.pill.set("자동 클릭 중", OK, pulse=True)
         elif self.repeater.running:
             self.pill.set("키 연타 중", OK, pulse=True)
+        elif getattr(self, "creator_runner", None) and self.creator_runner.running:
+            self.pill.set("창작 실행 중", OK, pulse=True)
         else:
             self.pill.set("대기 중", TXT_DIM, pulse=False)
 
@@ -934,6 +975,11 @@ class MacroApp:
                     self._on_update_ready(payload)
                 elif kind == "update_fail":
                     self._on_update_fail(payload)
+                elif kind == "creator_step":
+                    self.creator.on_step(*payload)
+                elif kind == "creator_done":
+                    self.creator.on_done()
+                    self._idle_state()
                 elif kind == "keyrep_hold":
                     if payload and not self.repeater.running:
                         self.toggle_keyrep()
@@ -1035,6 +1081,7 @@ class MacroApp:
     def _on_hotkey(self, action):
         {"record": self.toggle_record, "play": self.toggle_play,
          "click": self.toggle_click, "keyrep": self.toggle_keyrep,
+         "build": self.creator.toggle_run,
          "stop": self.stop_all}[action]()
 
     # --- 단축키 등록 ------------------------------------------------
@@ -1134,6 +1181,8 @@ class MacroApp:
         self.btn_click.config_text(hint=hotkey_label(self.hotkeys["click"], short=True))
         self.btn_keyrep.config_text(hint=hotkey_label(self.hotkeys["keyrep"], short=True))
         self.btn_stop.config_text(hint=hotkey_label(self.hotkeys["stop"], short=True))
+        if hasattr(self, "creator"):
+            self.creator.btn_run.config_text(hint=self.hotkey_hint("build"))
         if hasattr(self, "sg_mode"):
             self._on_mode()
         self.save_config()
@@ -1364,7 +1413,7 @@ class MacroApp:
         if self.recorder.active:
             self.toggle_record()
             acted = True
-        for worker in (self.player, self.clicker, self.repeater):
+        for worker in (self.player, self.clicker, self.repeater, self.creator_runner):
             if worker.running:
                 worker.stop()
                 acted = True
