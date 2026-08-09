@@ -1,4 +1,4 @@
-# MacroStudio v2.4.2
+# MacroStudio v2.4.3
 
 윈도우용 마우스/키보드 매크로 프로그램. 파이썬 + tkinter + pynput + Pillow.
 
@@ -160,7 +160,7 @@ macro-program/
   make_icon.py       앱 아이콘(icon.ico) 생성
   install.ps1 / 설치.bat    설치 (바로가기 + 앱 목록 등록)
   uninstall.ps1 / 제거.bat  제거
-  tests.py           자체 검사 (python tests.py — 창을 띄우지 않고 40여 가지 확인)
+  tests.py           자체 검사 (python tests.py — 창을 띄우지 않고 55가지 확인)
   requirements.txt   의존성
   배포/              배포용 묶음 (exe + 설치 스크립트)
 ```

@@ -243,8 +243,10 @@ def test_app():
     app._set_hotkey("click", app.hotkeys["record"])       # 이미 쓰는 키
     check("중복 단축키 거부", app.hotkeys["click"] == "F8")
     fired = []
+    real_put = app.msgq.put
     app.msgq.put = lambda item: fired.append(item)
     app._fire("ctrl+ESC")
+    app.msgq.put = real_put                   # 되돌리지 않으면 뒤 검사가 다 막힌다
     check("보조키를 쥐고 있어도 정지키 동작", fired == [("hotkey", "stop")], fired)
 
     # 숨긴 창은 실제 크기가 잡히지 않으므로, 어떤 크기를 요청했는지로 확인한다
@@ -282,6 +284,8 @@ def test_app():
     app.reset_settings()
     check("설정 초기화", not os.path.exists(macro.CONFIG_PATH))
 
+    test_robust(app, root)                    # 같은 창을 그대로 써서 이어 검사
+
     app._skip_save = True
     app.on_close()
     if os.path.exists(macro.CONFIG_PATH):
@@ -309,12 +313,65 @@ def test_coords():
 
     # 주입기는 SendInput 이 막혀 있어도 예전 방식으로 반드시 움직여야 한다
     s = core.Sender()
-    target = (here[0] + 60, here[1])
-    s.move(*target)
-    time.sleep(0.08)
-    now = winput.cursor_pos()
-    s.move(*here)
-    check("주입기가 실제로 커서를 옮김", abs(now[0] - target[0]) <= 2, (target, now))
+    ok, seen = False, None
+    for _ in range(3):                        # 사용자가 마우스를 만지면 흔들리므로 재시도
+        start = winput.cursor_pos()
+        target = (start[0] + 60, start[1])
+        s.move(*target)
+        time.sleep(0.1)
+        seen = winput.cursor_pos()
+        s.move(*start)
+        if abs(seen[0] - target[0]) <= 2:
+            ok = True
+            break
+        time.sleep(0.2)
+    check("주입기가 실제로 커서를 옮김", ok, seen)
+
+
+# ---------------------------------------------------------------- 8. 튼튼함
+def test_robust(app, root):
+    section("고장 나도 버티는지")
+
+    def pump(sec=0.4):
+        end = time.time() + sec
+        while time.time() < end:
+            root.update()
+            time.sleep(0.02)
+
+    app.msgq.put(("tick", ("click", 1)))          # 모양이 틀린 메시지
+    app.msgq.put(("모르는종류", None))
+    app.msgq.put(("log", ("살아있음", "msg")))
+    pump(0.5)
+    check("이상한 메시지가 와도 큐가 계속 돈다", "살아있음" in app.txt_log.get("1.0", "end"))
+
+    for fn, args in ((app._hk_press, (None,)), (app._hk_release, (None,)),
+                     (app._hk_click, (0, 0, None, True))):
+        try:
+            fn(*args)
+            ok = True
+        except Exception:
+            ok = False
+        check("리스너 콜백이 예외를 안 던짐 (%s)" % fn.__name__, ok)
+
+    check("망가진 매크로를 걸러냄",
+          macro.MacroApp._bad_event([{"t": 0, "e": "click", "p": True}]) == 0)
+    check("멀쩡한 매크로는 통과",
+          macro.MacroApp._bad_event([{"t": 0, "e": "click", "x": 1, "y": 2,
+                                      "b": "left", "p": True}]) is None)
+
+    far = "1080x950+%d+%d" % (macro.screen_size()[0] + 500, 100)
+    check("화면 밖 위치는 버림", "+" not in macro.MacroApp._onscreen(far),
+          macro.MacroApp._onscreen(far))
+    near = "1080x950+100+50"
+    check("화면 안 위치는 그대로", macro.MacroApp._onscreen(near) == near)
+
+    # 소스로 돌 때 자동 설치가 파이썬 실행 파일을 덮어쓰면 안 된다
+    swapped = []
+    real_apply = macro.updater.apply_update
+    macro.updater.apply_update = lambda *a, **k: swapped.append(a)
+    app._on_update_ready("아무파일")
+    macro.updater.apply_update = real_apply
+    check("소스 실행 중엔 exe 를 덮어쓰지 않음", swapped == [], swapped)
 
 
 def main():

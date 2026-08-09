@@ -33,7 +33,7 @@ from ui_kit import (BG, CARD, DANGER, FIELD, LINE, MONO, OK, SIDE, TXT, TXT_DIM,
                     Slider, StatusPill, Stepper, TextField, Toggle)
 
 APP_NAME = "MacroStudio"
-APP_VER = "2.4.2"
+APP_VER = "2.4.3"
 FROZEN = getattr(sys, "frozen", False)         # exe 로 묶인 상태인지
 
 if FROZEN:
@@ -863,6 +863,24 @@ class MacroApp:
             return ""
 
     @staticmethod
+    def _onscreen(geo):
+        """창 위치가 지금 화면 밖이면(연결이 끊긴 모니터 등) 위치를 버리고 크기만 쓴다."""
+        try:
+            wh, plus, pos = geo.partition("+")
+            if not plus or "+" not in pos:
+                return geo
+            w, h = (int(v) for v in wh.split("x"))
+            x, y = (int(v) for v in pos.split("+")[:2])
+            u = ctypes.windll.user32
+            vx, vy = u.GetSystemMetrics(76), u.GetSystemMetrics(77)
+            vw, vh = screen_size()
+            visible = (x + w > vx + 40 and y + h > vy + 40 and
+                       x < vx + vw - 40 and y < vy + vh - 40)
+            return geo if visible else wh
+        except Exception:
+            return geo
+
+    @staticmethod
     def _fit_geometry(geo, size):
         """예전에 저장한 창 크기가 지금 글자 크기에 모자라면 넓혀 준다."""
         try:
@@ -880,7 +898,7 @@ class MacroApp:
         geo = self.cfg.get("win_geometry", "")
         try:
             if self.cfg.get("win_remember", True) and geo and size != "max":
-                self.root.geometry(self._fit_geometry(geo, size))
+                self.root.geometry(self._onscreen(self._fit_geometry(geo, size)))
             elif size != "normal":
                 self.root.geometry("%dx%d" % win_size(size))
             if size == "max":
@@ -1110,6 +1128,10 @@ class MacroApp:
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_update_ready(self, path):
+        if not FROZEN:
+            # 소스로 돌 때는 sys.executable 이 파이썬 자체라 절대 덮어쓰면 안 된다
+            self._on_update_fail("소스 실행 중에는 자동 설치를 하지 않습니다")
+            return
         try:
             updater.apply_update(path, sys.executable, relaunch=True)
         except Exception as exc:
@@ -1187,83 +1209,99 @@ class MacroApp:
             self._own_hwnd = None
 
     def _pump(self):
-        """작업 스레드에서 온 메시지를 GUI 스레드에서 처리."""
+        """작업 스레드에서 온 메시지를 GUI 스레드에서 처리.
+
+        메시지 하나가 잘못돼도 이 루프는 멈추면 안 된다. 여기가 멈추면 단축키도
+        진행률도 완료 처리도 전부 죽는다 (앱은 살아 있는 것처럼 보이면서).
+        """
         self._update_own_hwnd()
         try:
             while True:
-                kind, payload = self.msgq.get_nowait()
-                if kind == "log":
-                    self._write_log(*payload)
-                elif kind == "hotkey":
-                    self._on_hotkey(payload)
-                elif kind == "prog":
-                    loop, ratio = payload
-                    self.bar.set(ratio)
-                    self.lbl_prog.configure(text="%d회차  %d%%" % (loop, ratio * 100))
-                elif kind == "tick":
-                    which, count, cycles = payload
-                    lbl = self.lbl_click if which == "click" else self.lbl_keyrep
-                    text = "%d회 실행" % count
-                    if cycles is not None and len(self.key_rows) > 1:
-                        text += "   %d바퀴" % cycles
-                    lbl.configure(text=text, fg=OK)
-                elif kind == "play_done":
-                    self.beep("done")
-                    self.btn_play.config_text("재생 시작", "primary", self.hotkey_hint("play"))
-                    self.bar.set(0)
-                    self.lbl_prog.configure(text="대기 중")
-                    self._idle_state()
-                elif kind == "click_done":
-                    self._click_button = None
-                    self.btn_click.config_text("자동 클릭 시작", "primary", self.hotkey_hint("click"))
-                    self.lbl_click.configure(text="%d회 실행 후 정지" % self.clicker.count,
-                                             fg=TXT_MUTE)
-                    self._idle_state()
-                elif kind == "keyrep_done":
-                    self._keyrep_tokens = set()
-                    self.btn_keyrep.config_text("키 연타 시작", "primary", self.hotkey_hint("keyrep"))
-                    done_text = "%d회 실행 후 정지" % self.repeater.count
-                    if len(self.key_rows) > 1:
-                        done_text = "%d바퀴 / " % self.repeater.cycles + done_text
-                    self.lbl_keyrep.configure(text=done_text, fg=TXT_MUTE)
-                    self._idle_state()
-                elif kind == "picked":
-                    self.st_cx.set(payload[0])
-                    self.st_cy.set(payload[1])
-                    self.btn_pick.config_text("3초 뒤 좌표 캡처", "soft")
-                    self.btn_pick.set_enabled(True)
-                    self._idle_state()
-                elif kind == "update_check":
-                    self._on_update_check(*payload)
-                elif kind == "update_prog":
-                    got, total = payload
-                    if total:
-                        self._set_update_text("받는 중 %d%% (%.1f/%.1f MB)"
-                                              % (got * 100 // total, got / 1048576,
-                                                 total / 1048576), ui.ACCENT)
-                    else:
-                        self._set_update_text("받는 중 %.1f MB" % (got / 1048576), ui.ACCENT)
-                elif kind == "update_ready":
-                    self._on_update_ready(payload)
-                elif kind == "update_fail":
-                    self._on_update_fail(payload)
-                elif kind == "keyrep_hold":
-                    if payload and not self.repeater.running:
-                        self.toggle_keyrep()
-                    elif not payload and self.repeater.running:
-                        self.repeater.stop()
-                elif kind == "hkcap":
-                    self._set_hotkey(*payload)
-                elif kind == "keycap":
-                    if self._cap_target is not None:
-                        self._cap_target["key"].set(payload)
-                        self._cap_target["cap"].config_text("캡처", "ghost")
-                        self._cap_target["cap"].set_enabled(True)
-                        self._cap_target = None
-                    self._idle_state()
-        except queue.Empty:
-            pass
-        self.root.after(40, self._pump)
+                try:
+                    kind, payload = self.msgq.get_nowait()
+                except queue.Empty:
+                    break
+                try:
+                    self._handle(kind, payload)
+                except Exception as exc:
+                    try:
+                        self._write_log("내부 오류 (%s): %s" % (kind, exc), "err")
+                    except Exception:
+                        pass
+        finally:
+            self.root.after(40, self._pump)
+
+    def _handle(self, kind, payload):
+        """메시지 한 건 처리."""
+        if kind == "log":
+            self._write_log(*payload)
+        elif kind == "hotkey":
+            self._on_hotkey(payload)
+        elif kind == "prog":
+            loop, ratio = payload
+            self.bar.set(ratio)
+            self.lbl_prog.configure(text="%d회차  %d%%" % (loop, ratio * 100))
+        elif kind == "tick":
+            which, count, cycles = payload
+            lbl = self.lbl_click if which == "click" else self.lbl_keyrep
+            text = "%d회 실행" % count
+            if cycles is not None and len(self.key_rows) > 1:
+                text += "   %d바퀴" % cycles
+            lbl.configure(text=text, fg=OK)
+        elif kind == "play_done":
+            self.beep("done")
+            self.btn_play.config_text("재생 시작", "primary", self.hotkey_hint("play"))
+            self.bar.set(0)
+            self.lbl_prog.configure(text="대기 중")
+            self._idle_state()
+        elif kind == "click_done":
+            self._click_button = None
+            self.btn_click.config_text("자동 클릭 시작", "primary", self.hotkey_hint("click"))
+            self.lbl_click.configure(text="%d회 실행 후 정지" % self.clicker.count,
+                                     fg=TXT_MUTE)
+            self._idle_state()
+        elif kind == "keyrep_done":
+            self._keyrep_tokens = set()
+            self.btn_keyrep.config_text("키 연타 시작", "primary", self.hotkey_hint("keyrep"))
+            done_text = "%d회 실행 후 정지" % self.repeater.count
+            if len(self.key_rows) > 1:
+                done_text = "%d바퀴 / " % self.repeater.cycles + done_text
+            self.lbl_keyrep.configure(text=done_text, fg=TXT_MUTE)
+            self._idle_state()
+        elif kind == "picked":
+            self.st_cx.set(payload[0])
+            self.st_cy.set(payload[1])
+            self.btn_pick.config_text("3초 뒤 좌표 캡처", "soft")
+            self.btn_pick.set_enabled(True)
+            self._idle_state()
+        elif kind == "update_check":
+            self._on_update_check(*payload)
+        elif kind == "update_prog":
+            got, total = payload
+            if total:
+                self._set_update_text("받는 중 %d%% (%.1f/%.1f MB)"
+                                      % (got * 100 // total, got / 1048576,
+                                         total / 1048576), ui.ACCENT)
+            else:
+                self._set_update_text("받는 중 %.1f MB" % (got / 1048576), ui.ACCENT)
+        elif kind == "update_ready":
+            self._on_update_ready(payload)
+        elif kind == "update_fail":
+            self._on_update_fail(payload)
+        elif kind == "keyrep_hold":
+            if payload and not self.repeater.running:
+                self.toggle_keyrep()
+            elif not payload and self.repeater.running:
+                self.repeater.stop()
+        elif kind == "hkcap":
+            self._set_hotkey(*payload)
+        elif kind == "keycap":
+            if self._cap_target is not None:
+                self._cap_target["key"].set(payload)
+                self._cap_target["cap"].config_text("캡처", "ghost")
+                self._cap_target["cap"].set_enabled(True)
+                self._cap_target = None
+            self._idle_state()
 
     # ------------------------------------------------------------ 전역 단축키
     def _start_hotkey_listener(self):
@@ -1277,6 +1315,12 @@ class MacroApp:
         self._hk_mouse.start()
 
     def _hk_press(self, key):
+        try:
+            self._on_key_down(key)
+        except Exception:                      # 콜백이 터지면 리스너 스레드가 죽는다
+            pass
+
+    def _on_key_down(self, key):
         token = hotkey_token(key)
         if not token:
             return
@@ -1295,11 +1339,20 @@ class MacroApp:
         self._fire(make_spec(mods, token))
 
     def _hk_release(self, key):
-        token = hotkey_token(key)
-        self._hk_mods.discard(token)
-        self._hold_release(token)
+        try:
+            token = hotkey_token(key)
+            self._hk_mods.discard(token)
+            self._hold_release(token)
+        except Exception:
+            pass
 
     def _hk_click(self, x, y, button, pressed):
+        try:
+            self._on_mouse_click(x, y, button, pressed)
+        except Exception:
+            pass
+
+    def _on_mouse_click(self, x, y, button, pressed):
         if self._hk_capture is not None:
             return
         token = mouse_token(button)
@@ -1688,6 +1741,19 @@ class MacroApp:
         self._idle_state()
 
     # ------------------------------------------------------------ 매크로 파일
+    NEEDS = {"move": ("x", "y"), "click": ("x", "y", "b", "p"),
+             "scroll": ("x", "y", "dx", "dy"), "key": ("a", "k")}
+
+    @classmethod
+    def _bad_event(cls, events):
+        """망가진 이벤트가 있으면 그 번호를 돌려준다 (재생하다 멈추기 전에 막는다)."""
+        for i, ev in enumerate(events):
+            if not isinstance(ev, dict) or "t" not in ev or ev.get("e") not in cls.NEEDS:
+                return i
+            if any(f not in ev for f in cls.NEEDS[ev["e"]]):
+                return i
+        return None
+
     def refresh_macro_list(self):
         self.lst.delete(0, "end")
         try:
@@ -1742,8 +1808,11 @@ class MacroApp:
             with open(path, "r", encoding="utf-8") as fp:
                 data = json.load(fp)
             events = data["events"] if isinstance(data, dict) else data
-            if not isinstance(events, list):
+            if not isinstance(events, list) or not events:
                 raise ValueError("이벤트 목록을 찾을 수 없습니다.")
+            bad = self._bad_event(events)
+            if bad is not None:
+                raise ValueError("%d번째 이벤트가 올바르지 않습니다: %s" % (bad + 1, events[bad]))
         except Exception as exc:
             messagebox.showerror("불러오기 실패", str(exc))
             return
