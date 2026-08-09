@@ -30,12 +30,26 @@ DANGER = "#ff5b6e"
 DANGER2 = "#ff7a6b"
 
 
+FONT_DELTA = 0        # 글자 크기 조절 (설정에서 바꾸고 다시 켜면 적용)
+
+
 def UI(size=10, weight="normal"):
-    return ("맑은 고딕", size, weight)
+    return ("맑은 고딕", size + FONT_DELTA, weight)
 
 
 def MONO(size=9, weight="normal"):
-    return ("Cascadia Mono", size, weight)
+    return ("Cascadia Mono", size + FONT_DELTA, weight)
+
+
+def set_theme(accent=None, accent2=None, font_delta=None):
+    """앱을 만들기 전에 강조색·글자 크기를 바꾼다 (위젯이 그려질 때 이 값을 읽는다)."""
+    global ACCENT, ACCENT2, FONT_DELTA
+    if accent:
+        ACCENT = accent
+    if accent2:
+        ACCENT2 = accent2
+    if font_delta is not None:
+        FONT_DELTA = int(font_delta)
 
 
 _fonts = {}
@@ -175,17 +189,6 @@ def icon(name, size, color, bg):
     elif name == "folder":
         d.rounded_rectangle([S * 0.1, S * 0.26, S * 0.9, S * 0.82], radius=S * 0.1, fill=color)
         d.rounded_rectangle([S * 0.1, S * 0.18, S * 0.45, S * 0.34], radius=S * 0.06, fill=color)
-    elif name == "blocks":
-        d.rounded_rectangle([S * 0.08, S * 0.12, S * 0.62, S * 0.36], radius=S * 0.06, fill=color)
-        d.rounded_rectangle([S * 0.24, S * 0.4, S * 0.78, S * 0.64], radius=S * 0.06, fill=color)
-        d.rounded_rectangle([S * 0.08, S * 0.68, S * 0.5, S * 0.92], radius=S * 0.06, fill=color)
-    elif name == "plus":
-        w = S * 0.09
-        d.rounded_rectangle([S * 0.5 - w, S * 0.2, S * 0.5 + w, S * 0.8], radius=w, fill=color)
-        d.rounded_rectangle([S * 0.2, S * 0.5 - w, S * 0.8, S * 0.5 + w], radius=w, fill=color)
-    elif name == "chevron":
-        d.line([(S * 0.3, S * 0.42), (S * 0.5, S * 0.62), (S * 0.7, S * 0.42)],
-               fill=color, width=int(S * 0.09), joint="curve")
     elif name == "logo":
         d.rounded_rectangle([0, 0, S - 1, S - 1], radius=S * 0.28, fill=color)
 
@@ -754,121 +757,6 @@ class TextField(tk.Canvas):
 
     def set(self, value):
         self.var.set(value)
-
-
-# ---------------------------------------------------------------- 드롭다운
-class Select(tk.Canvas):
-    def __init__(self, master, options, value=None, bg=CARD, width=120, height=34,
-                 command=None):
-        super().__init__(master, width=width, height=height, bg=bg,
-                         highlightthickness=0, bd=0)
-        self.options = list(options)
-        self.value = value if value is not None else self.options[0]
-        self.command, self.bg = command, bg
-        self.w, self.h = width, height
-        self._imgs = {}
-        self._pop = None
-        self._hover = False
-        self._draw()
-        self.bind("<Button-1>", lambda e: self.open())
-        self.bind("<Enter>", lambda e: self._set_hover(True))
-        self.bind("<Leave>", lambda e: self._set_hover(False))
-
-    def _set_hover(self, on):
-        self._hover = on
-        self.configure(cursor="hand2" if on else "")
-        self._draw()
-
-    def _draw(self):
-        self.delete("all")
-        fill = FIELD_HI if self._hover else FIELD
-        im = rounded(self.w, self.h, 9, fill, self.bg, border=LINE)
-        self._imgs["bg"] = im
-        self.create_image(0, 0, anchor="nw", image=im)
-        self.create_text(14, self.h / 2, text=str(self.value), anchor="w",
-                         fill=TXT, font=MONO(10, "bold"))
-        ch = icon("chevron", 16, TXT_DIM, fill)
-        self._imgs["c"] = ch
-        self.create_image(self.w - 24, self.h / 2 - 8, anchor="nw", image=ch)
-
-    def open(self):
-        if self._pop is not None:
-            return self.close()
-        rowh = 30
-        pad = 6
-        ph = rowh * len(self.options) + pad * 2
-        pw = self.w
-        top = tk.Toplevel(self)
-        top.overrideredirect(True)
-        top.attributes("-topmost", True)
-        top.configure(bg=BG)
-        x = self.winfo_rootx()
-        y = self.winfo_rooty() + self.h + 6
-        top.geometry("%dx%d+%d+%d" % (pw, ph, x, y))
-        cv = tk.Canvas(top, width=pw, height=ph, bg=BG, highlightthickness=0, bd=0)
-        cv.pack()
-        bgim = rounded(pw, ph, 10, FIELD, BG, border=LINE)
-        cv.image = bgim
-        cv.create_image(0, 0, anchor="nw", image=bgim)
-        rows = {}
-        for i, opt in enumerate(self.options):
-            y0 = pad + i * rowh
-            tag = "row%d" % i
-            rows[tag] = opt
-            hl = rounded(pw - 10, rowh - 2, 6, FIELD, FIELD)
-            cv.rowimgs = getattr(cv, "rowimgs", {})
-            cv.rowimgs[tag] = hl
-            cv.create_image(5, y0, anchor="nw", image=hl, tags=(tag, tag + "bg"))
-            cv.create_text(16, y0 + rowh / 2, text=str(opt), anchor="w",
-                           fill=ACCENT if opt == self.value else TXT,
-                           font=MONO(10, "bold"), tags=(tag,))
-
-            def enter(_e, t=tag):
-                im = rounded(pw - 10, rowh - 2, 6, mix(FIELD, "#ffffff", 0.08), FIELD)
-                cv.rowimgs[t] = im
-                cv.itemconfigure(t + "bg", image=im)
-                cv.configure(cursor="hand2")
-
-            def leave(_e, t=tag):
-                im = rounded(pw - 10, rowh - 2, 6, FIELD, FIELD)
-                cv.rowimgs[t] = im
-                cv.itemconfigure(t + "bg", image=im)
-
-            cv.tag_bind(tag, "<Enter>", enter)
-            cv.tag_bind(tag, "<Leave>", leave)
-            cv.tag_bind(tag, "<Button-1>", lambda _e, o=opt: self._choose(o))
-
-        self._pop = top
-        top.bind("<FocusOut>", lambda e: self.close())
-        top.focus_set()
-        self.winfo_toplevel().bind("<Button-1>", self._outside, add="+")
-
-    def _outside(self, event):
-        if self._pop is not None and event.widget is not self:
-            self.close()
-
-    def _choose(self, opt):
-        self.close()
-        if opt != self.value:
-            self.value = opt
-            self._draw()
-            if self.command:
-                self.command(opt)
-
-    def close(self):
-        if self._pop is not None:
-            try:
-                self._pop.destroy()
-            except Exception:
-                pass
-            self._pop = None
-
-    def get(self):
-        return self.value
-
-    def set(self, value):
-        self.value = value
-        self._draw()
 
 
 # ---------------------------------------------------------------- 단축키 입력칸

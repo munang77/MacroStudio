@@ -22,19 +22,17 @@ from tkinter import filedialog, messagebox
 
 from pynput import keyboard, mouse
 
-import builder
 import ui_kit as ui
 import updater
-from creator_ui import CreatorPage
 from core import (BUTTONS, MOD_KEYS, Player, Recorder, RepeatWorker, Sender,
                   SequenceWorker, canon_name, current_mods, hotkey_label, hotkey_token,
                   is_pressed, make_spec, mouse_token, parse_combo, spec_main, spec_mods)
-from ui_kit import (ACCENT, BG, CARD, DANGER, FIELD, LINE, MONO, OK, SIDE, TXT,
-                    TXT_DIM, TXT_MUTE, UI, WARN, Bar, Btn, Card, KeyField, NavItem,
-                    Segmented, Slider, StatusPill, Stepper, TextField, Toggle)
+from ui_kit import (BG, CARD, DANGER, FIELD, LINE, MONO, OK, SIDE, TXT, TXT_DIM,
+                    TXT_MUTE, UI, WARN, Bar, Btn, Card, KeyField, NavItem, Segmented,
+                    Slider, StatusPill, Stepper, TextField, Toggle)
 
 APP_NAME = "MacroStudio"
-APP_VER = "2.3.1"
+APP_VER = "2.4"
 FROZEN = getattr(sys, "frozen", False)         # exe 로 묶인 상태인지
 
 if FROZEN:
@@ -46,15 +44,14 @@ else:
     DATA_DIR = APP_DIR
 
 MACRO_DIR = os.path.join(DATA_DIR, "macros")
-CREATION_DIR = os.path.join(DATA_DIR, "creations")
 CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 WINDOW_TITLE = "%s - 매크로 프로그램" % APP_NAME
 
 HOTKEY_ACTIONS = [("record", "기록 시작 / 중지"), ("play", "재생 시작 / 중지"),
                   ("click", "자동 클릭 켜기 / 끄기"), ("keyrep", "키 연타 켜기 / 끄기"),
-                  ("build", "창작 시작 / 정지"), ("stop", "전체 정지")]
+                  ("stop", "전체 정지")]
 DEFAULT_HOTKEYS = {"record": "F6", "play": "F7", "click": "F8",
-                   "keyrep": "F9", "build": "F10", "stop": "ESC"}
+                   "keyrep": "F9", "stop": "ESC"}
 CAPTURE_TIMEOUT = 6.0        # 단축키 입력 대기 시간(초)
 MAX_KEY_ROWS = 6             # 키 연타에 넣을 수 있는 키 개수
 
@@ -62,8 +59,8 @@ PAGES = [
     ("record", "기록 / 재생", "record", "마우스와 키보드 동작을 그대로 담아 반복합니다"),
     ("click", "자동 클릭", "mouse", "원하는 간격으로 마우스를 자동으로 클릭합니다"),
     ("key", "키 연타", "keyboard", "키 하나 또는 여러 키를 순서대로 반복 입력합니다"),
-    ("build", "창작", "blocks", "블록을 조립해 나만의 매크로를 만듭니다"),
-    ("set", "설정", "gear", "전역 단축키를 바꾸고 사용법을 확인합니다"),
+    ("set", "설정", "gear", "단축키와 화면·동작을 취향대로 맞춥니다"),
+    ("help", "도움말", "folder", "쓰는 순서와 알아둘 점을 정리했습니다"),
 ]
 
 
@@ -89,6 +86,61 @@ def claim_single_instance():
     except Exception:
         pass
     return False
+
+
+WIN_SIZES = {"normal": (1080, 950), "large": (1280, 1060)}
+
+
+def win_size(mode):
+    """글자를 키우면 내용도 커지므로 창 크기도 같이 늘려 준다."""
+    w, h = WIN_SIZES.get(mode, WIN_SIZES["normal"])
+    d = max(0, min(2, ui.FONT_DELTA))
+    return w + 30 * d, h + 45 * d
+ACCENTS = {                                   # 이름: (강조색, 그라데이션 끝색)
+    "파랑": ("#5b8cff", "#8b6cff"),
+    "초록": ("#2fbf71", "#3ddc97"),
+    "보라": ("#a06bff", "#d46bff"),
+    "주황": ("#ff8a3d", "#ffb347"),
+}
+RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+
+
+def _autostart_command():
+    if FROZEN:
+        return '"%s"' % sys.executable
+    exe = sys.executable
+    if exe.lower().endswith("python.exe"):
+        pyw = exe[:-len("python.exe")] + "pythonw.exe"
+        if os.path.exists(pyw):
+            exe = pyw
+    return '"%s" "%s"' % (exe, os.path.join(APP_DIR, "macro.py"))
+
+
+def is_autostart():
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
+            value, _ = winreg.QueryValueEx(key, APP_NAME)
+            return bool(value)
+    except Exception:
+        return False
+
+
+def set_autostart(on):
+    """윈도우 시작 프로그램 등록/해제 (현재 사용자만, 관리자 권한 필요 없음)."""
+    try:
+        import winreg
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
+            if on:
+                winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, _autostart_command())
+            else:
+                try:
+                    winreg.DeleteValue(key, APP_NAME)
+                except FileNotFoundError:
+                    pass
+        return True
+    except Exception:
+        return False
 
 
 def resource(name):
@@ -133,7 +185,7 @@ class MacroApp:
         self.sender = Sender()           # 실제 마우스/키보드와 같은 경로로 입력을 보낸다
         self.mouse_ctl = mouse.Controller()      # 좌표 읽기용
         self._last_tick = 0.0
-        self._last_creator_tick = 0.0
+        self._skip_save = False
 
         self.hotkeys = dict(DEFAULT_HOTKEYS)      # 설정이 일부만 있어도 나머지는 기본값
         saved = self.cfg.get("hotkeys")
@@ -152,14 +204,6 @@ class MacroApp:
                                     lambda n: self._tick("click", n))
         self.repeater = SequenceWorker(self.log, lambda: self.msgq.put(("keyrep_done", None)),
                                        lambda n, c: self._tick("keyrep", n, c))
-        self.macro_dir = MACRO_DIR
-        self.icon_path = resource("icon.ico")
-        self.creator_runner = builder.Runner(
-            self.sender, self.log,
-            lambda: self.msgq.put(("creator_done", None)),
-            on_step=self._creator_tick,
-            play_macro=self._creator_play_macro)
-
         self._capture_listener = None
         self._cap_target = None          # 키 캡처 중인 행
         self._hk_mods = set()            # 현재 눌려 있는 보조키
@@ -186,8 +230,17 @@ class MacroApp:
             return {}
 
     def save_config(self):
+        if getattr(self, "_skip_save", False):
+            return                             # 방금 초기화했으면 다시 쓰지 않는다
         data = {
             "hotkeys": self.hotkeys,
+            "win_size": self.sg_winsize.get(),
+            "win_remember": self.tg_remember.get(),
+            "win_geometry": self._window_geometry(),
+            "always_on_top": self.tg_ontop.get(),
+            "font_delta": self.sg_font.get(),
+            "accent": self.cfg.get("accent", "파랑"),
+            "sound": self.tg_sound.get(),
             "record_move": self.tg_move.get(),
             "play_repeat": self.st_repeat.get(),
             "play_speed": self.sl_speed.get(),
@@ -226,8 +279,10 @@ class MacroApp:
     def _build_ui(self):
         r = self.root
         r.title(WINDOW_TITLE)
-        r.geometry("1080x950")
-        r.minsize(1040, 900)
+        base_w, base_h = win_size("normal")
+        r.geometry("%dx%d" % (base_w, base_h))
+        r.minsize(base_w - 40, base_h - 50)
+        self._restore_window()
         r.configure(bg=BG)
         r.protocol("WM_DELETE_WINDOW", self.on_close)
         try:
@@ -256,13 +311,12 @@ class MacroApp:
         self.pagebox = tk.Frame(main, bg=BG)
         self.pagebox.pack(fill="both", expand=True, padx=26, pady=(18, 0))
 
-        self.creator = CreatorPage(self, self.pagebox, CREATION_DIR)
         self.pages = {
             "record": self._page_record(),
             "click": self._page_click(),
             "key": self._page_key(),
-            "build": self.creator.frame,
             "set": self._page_settings(),
+            "help": self._page_help(),
         }
         self.current = None
         self.show_page("record")
@@ -274,7 +328,9 @@ class MacroApp:
         self._entry_focus = isinstance(event.widget, tk.Entry)
 
     def _build_sidebar(self):
-        bar = tk.Frame(self.root, bg=SIDE, width=216)
+        # 글자를 키우면 사이드바 글씨도 커지므로 폭을 같이 늘린다 (안 그러면 안내문이 잘림)
+        grow = 16 * max(0, min(2, ui.FONT_DELTA))
+        bar = tk.Frame(self.root, bg=SIDE, width=216 + grow)
         bar.pack(side="left", fill="y")
         bar.pack_propagate(False)
 
@@ -292,14 +348,15 @@ class MacroApp:
 
         self.nav = {}
         for key, label, icon_name, _sub in PAGES:
-            item = NavItem(bar, label, icon_name, lambda k=key: self.show_page(k), bg=SIDE)
+            item = NavItem(bar, label, icon_name, lambda k=key: self.show_page(k),
+                           bg=SIDE, width=186 + grow)
             item.pack(padx=15, pady=3)
             self.nav[key] = item
 
         bottom = tk.Frame(bar, bg=SIDE)
         bottom.pack(side="bottom", fill="x", padx=15, pady=18)
-        self.btn_stop = Btn(bottom, "전체 정지", self.stop_all, width=186, height=42,
-                            variant="danger", bg=SIDE, hint=hotkey_label(self.hotkeys["stop"], short=True))
+        self.btn_stop = Btn(bottom, "전체 정지", self.stop_all, width=186 + grow, height=42,
+                            variant="danger", bg=SIDE, hint=self.hotkey_hint("stop"))
         self.btn_stop.pack()
         tk.Label(bottom, text="언제든 눌러 모든 동작을 멈춥니다", bg=SIDE, fg=TXT_MUTE,
                  font=UI(8)).pack(pady=(9, 0))
@@ -330,26 +387,6 @@ class MacroApp:
         """버튼 위 작은 칩에 넣을 단축키 이름."""
         return hotkey_label(self.hotkeys.get(action, "없음"), short=True)
 
-    def _creator_play_macro(self, name):
-        """창작 블록에서 기록해 둔 매크로를 불러 재생한다 (끝날 때까지 기다림)."""
-        path = os.path.join(MACRO_DIR, (name or "").strip() + ".json")
-        try:
-            with open(path, "r", encoding="utf-8") as fp:
-                data = json.load(fp)
-            events = data["events"] if isinstance(data, dict) else data
-        except Exception as exc:
-            self.log("매크로를 열 수 없습니다: %s (%s)" % (name, exc), "err")
-            return False
-        sub = Player(lambda m, kind="msg": None, lambda: None)
-        sub.sender = self.sender
-        sub.smooth = self.tg_smooth.get()
-        sub.start(events, 1, self.sl_speed.get(), 0)
-        while sub.running:
-            if self.creator_runner._stop.is_set():
-                sub.stop()
-                break
-            time.sleep(0.02)
-        return True
 
     def _card(self, parent, title, sub=None, icon_name=None, expand=False):
         card = Card(parent, bg=CARD, outer=BG, pad=18)
@@ -357,7 +394,7 @@ class MacroApp:
         head = tk.Frame(card.body, bg=CARD)
         head.pack(fill="x")
         if icon_name:
-            im = ui.icon(icon_name, 16, ACCENT, CARD)
+            im = ui.icon(icon_name, 16, ui.ACCENT, CARD)
             lb = tk.Label(head, image=im, bg=CARD, bd=0)
             lb.image = im
             lb.pack(side="left", padx=(0, 8))
@@ -387,7 +424,7 @@ class MacroApp:
         row = tk.Frame(body, bg=CARD)
         row.pack(fill="x")
         self.btn_rec = Btn(row, "기록 시작", self.toggle_record, width=190, height=44,
-                           variant="primary", bg=CARD, hint=hotkey_label(self.hotkeys["record"], short=True))
+                           variant="primary", bg=CARD, hint=self.hotkey_hint("record"))
         self.btn_rec.pack(side="left")
         self.tg_move = Toggle(row, "마우스 이동 경로까지 기록", self.cfg.get("record_move", True),
                               bg=CARD)
@@ -424,7 +461,7 @@ class MacroApp:
         row = tk.Frame(body, bg=CARD)
         row.pack(fill="x", pady=(18, 0))
         self.btn_play = Btn(row, "재생 시작", self.toggle_play, width=190, height=44,
-                            variant="primary", bg=CARD, hint=hotkey_label(self.hotkeys["play"], short=True))
+                            variant="primary", bg=CARD, hint=self.hotkey_hint("play"))
         self.btn_play.pack(side="left")
         self.tg_smooth = Toggle(row, "부드럽게 이동", self.cfg.get("play_smooth", True),
                                 bg=CARD, command=lambda v: self._sync_smooth())
@@ -445,7 +482,7 @@ class MacroApp:
         panel = Card(wrap, bg=FIELD, outer=CARD, radius=10, pad=8)
         panel.pack(side="left", fill="both", expand=True)
         self.lst = tk.Listbox(panel.body, bg=FIELD, fg=TXT, bd=0, highlightthickness=0,
-                              selectbackground=ACCENT, selectforeground="#ffffff",
+                              selectbackground=ui.ACCENT, selectforeground="#ffffff",
                               font=UI(10), activestyle="none")
         self.lst.pack(fill="both", expand=True)
         self.lst.bind("<Double-Button-1>", lambda _e: self.load_macro())
@@ -519,7 +556,7 @@ class MacroApp:
         row = tk.Frame(body, bg=CARD)
         row.pack(fill="x")
         self.btn_click = Btn(row, "자동 클릭 시작", self.toggle_click, width=200, height=44,
-                             variant="primary", bg=CARD, hint=hotkey_label(self.hotkeys["click"], short=True))
+                             variant="primary", bg=CARD, hint=self.hotkey_hint("click"))
         self.btn_click.pack(side="left")
         self.lbl_click = tk.Label(row, text="정지 상태", bg=CARD, fg=TXT_MUTE, font=MONO(10))
         self.lbl_click.pack(side="left", padx=18)
@@ -580,7 +617,7 @@ class MacroApp:
         row = tk.Frame(body, bg=CARD)
         row.pack(fill="x")
         self.btn_keyrep = Btn(row, "키 연타 시작", self.toggle_keyrep, width=200, height=44,
-                              variant="primary", bg=CARD, hint=hotkey_label(self.hotkeys["keyrep"], short=True))
+                              variant="primary", bg=CARD, hint=self.hotkey_hint("keyrep"))
         self.btn_keyrep.pack(side="left")
         self.lbl_keyrep = tk.Label(row, text="정지 상태", bg=CARD, fg=TXT_MUTE, font=MONO(10))
         self.lbl_keyrep.pack(side="left", padx=18)
@@ -706,6 +743,193 @@ class MacroApp:
                  bg=CARD, fg=TXT_MUTE, font=UI(9), justify="left",
                  wraplength=700).pack(anchor="w", pady=(2, 0))
 
+        self._build_display_card(page)
+        return page
+
+    # ------------------------------------------------------------ 화면·동작 설정
+    def _build_display_card(self, page):
+        _c, _h, body = self._card(page, "화면 · 동작", "취향대로 맞추세요", "gear")
+
+        row = tk.Frame(body, bg=CARD)
+        row.pack(fill="x", pady=(0, 12))
+        f = self._field(row, "창 크기")
+        self.sg_winsize = Segmented(f, [("보통", "normal"), ("크게", "large"),
+                                        ("최대화", "max")],
+                                    self.cfg.get("win_size", "normal"), bg=CARD, height=32,
+                                    command=lambda v: self.apply_window_size(v))
+        self.sg_winsize.pack()
+        f.pack(side="left")
+        self.tg_remember = Toggle(row, "창 크기·위치 기억", self.cfg.get("win_remember", True),
+                                  bg=CARD)
+        self.tg_remember.pack(side="left", padx=(22, 0), pady=(20, 0))
+        self.tg_ontop = Toggle(row, "항상 위에 표시", self.cfg.get("always_on_top", False),
+                               bg=CARD, command=lambda v: self.apply_on_top(v))
+        self.tg_ontop.pack(side="left", padx=(22, 0), pady=(20, 0))
+
+        row = tk.Frame(body, bg=CARD)
+        row.pack(fill="x", pady=(0, 12))
+        f = self._field(row, "글자 크기")
+        self.sg_font = Segmented(f, [("보통", 0), ("크게", 1), ("아주 크게", 2)],
+                                 self.cfg.get("font_delta", 0), bg=CARD, height=32,
+                                 command=lambda v: self._need_restart("글자 크기"))
+        self.sg_font.pack()
+        f.pack(side="left")
+
+        f = self._field(row, "강조 색")
+        swatches = tk.Frame(f, bg=CARD)
+        swatches.pack()
+        self._accent_btns = {}
+        for name, (c1, c2) in ACCENTS.items():
+            b = tk.Frame(swatches, bg=c1, width=30, height=30, highlightthickness=2,
+                         highlightbackground=TXT if name == self.cfg.get("accent", "파랑")
+                         else LINE, cursor="hand2")
+            b.pack(side="left", padx=(0, 8))
+            b.pack_propagate(False)
+            b.bind("<Button-1>", lambda _e, n=name: self.pick_accent(n))
+            self._accent_btns[name] = b
+        f.pack(side="left", padx=(22, 0))
+
+        self.lbl_restart = tk.Label(row, text="", bg=CARD, fg=WARN, font=UI(9))
+        self.lbl_restart.pack(side="left", padx=(18, 0), pady=(20, 0))
+
+        row = tk.Frame(body, bg=CARD)
+        row.pack(fill="x")
+        self.tg_sound = Toggle(row, "시작·정지할 때 알림음", self.cfg.get("sound", False),
+                               bg=CARD)
+        self.tg_sound.pack(side="left", pady=6)
+        self.tg_autostart = Toggle(row, "윈도우 켤 때 자동 실행", is_autostart(), bg=CARD,
+                                   command=lambda v: self.apply_autostart(v))
+        self.tg_autostart.pack(side="left", padx=(22, 0), pady=6)
+
+        Btn(row, "설정 초기화", self.reset_settings, width=104, height=32, variant="ghost",
+            bg=CARD, font=UI(9, "bold")).pack(side="right")
+        Btn(row, "데이터 폴더 열기", self.open_data_folder, width=126, height=32,
+            variant="ghost", bg=CARD, font=UI(9, "bold")).pack(side="right", padx=8)
+
+    def _window_geometry(self):
+        """지금 창 크기·위치 (최대화 상태면 저장하지 않는다)."""
+        try:
+            if self.root.state() != "normal":
+                return self.cfg.get("win_geometry", "")
+            return self.root.geometry()
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _fit_geometry(geo, size):
+        """예전에 저장한 창 크기가 지금 글자 크기에 모자라면 넓혀 준다."""
+        try:
+            wh, _, pos = geo.partition("+")
+            w, h = (int(v) for v in wh.split("x"))
+            need_w, need_h = win_size(size)
+            w, h = max(w, need_w), max(h, need_h)
+            return "%dx%d%s%s" % (w, h, "+" if pos else "", pos)
+        except Exception:
+            return geo
+
+    def _restore_window(self):
+        """저장해 둔 창 크기·위치, 창 크기 프리셋, 항상 위 설정을 되살린다."""
+        size = self.cfg.get("win_size", "normal")
+        geo = self.cfg.get("win_geometry", "")
+        try:
+            if self.cfg.get("win_remember", True) and geo and size != "max":
+                self.root.geometry(self._fit_geometry(geo, size))
+            elif size != "normal":
+                self.root.geometry("%dx%d" % win_size(size))
+            if size == "max":
+                self.root.state("zoomed")
+            if self.cfg.get("always_on_top", False):
+                self.root.attributes("-topmost", True)
+        except Exception:
+            pass
+
+    def _need_restart(self, what):
+        self.lbl_restart.configure(text="%s 설정은 다시 켜면 적용됩니다" % what)
+        self.save_config()
+
+    def apply_window_size(self, mode, remember=True):
+        """창 크기 프리셋. '최대화' 는 화면에 맞춰 키운다."""
+        try:
+            if mode == "max":
+                self.root.state("zoomed")
+            else:
+                if self.root.state() == "zoomed":
+                    self.root.state("normal")
+                w, h = win_size(mode)
+                sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+                self.root.geometry("%dx%d+%d+%d" % (w, h, max(0, (sw - w) // 2),
+                                                    max(0, (sh - h) // 3)))
+        except Exception:
+            pass
+        if remember:
+            self.save_config()
+
+    def apply_on_top(self, on):
+        try:
+            self.root.attributes("-topmost", bool(on))
+        except Exception:
+            pass
+        self.save_config()
+
+    def pick_accent(self, name):
+        for other, box in self._accent_btns.items():
+            box.configure(highlightbackground=TXT if other == name else LINE)
+        self.cfg["accent"] = name
+        self._need_restart("강조 색")
+
+    def apply_autostart(self, on):
+        ok = set_autostart(bool(on))
+        if not ok:
+            self.log("자동 실행 설정을 바꾸지 못했습니다.", "err")
+            self.tg_autostart.set(is_autostart())
+            return
+        self.log("윈도우 켤 때 자동 실행: %s" % ("켜짐" if on else "꺼짐"), "ok")
+
+    def open_data_folder(self):
+        try:
+            os.makedirs(DATA_DIR, exist_ok=True)
+            os.startfile(DATA_DIR)
+        except Exception as exc:
+            self.log("폴더를 열 수 없습니다: %s" % exc, "err")
+
+    def reset_settings(self):
+        if not messagebox.askyesno("설정 초기화",
+                                   "모든 설정을 기본값으로 되돌립니다.\n"
+                                   "저장한 매크로는 그대로 남습니다. 계속할까요?"):
+            return
+        self._skip_save = True
+        try:
+            if os.path.exists(CONFIG_PATH):
+                os.remove(CONFIG_PATH)
+        except Exception as exc:
+            self.log("설정을 지우지 못했습니다: %s" % exc, "err")
+            self._skip_save = False
+            return
+        if is_autostart():                     # 자동 실행 등록도 기본값(꺼짐)으로
+            set_autostart(False)
+            self.tg_autostart.set(False)
+        self.log("설정을 초기화했습니다. 다시 켜면 기본값으로 시작합니다.", "ok")
+        self.lbl_restart.configure(text="다시 켜면 기본값으로 시작합니다")
+
+    def beep(self, kind):
+        """알림음 (켜 둔 경우에만). 소리 때문에 동작이 늦어지지 않게 따로 돌린다."""
+        if not getattr(self, "tg_sound", None) or not self.tg_sound.get():
+            return
+        tone = {"start": (880, 90), "stop": (620, 90), "done": (990, 70)}.get(kind)
+        if not tone:
+            return
+
+        def play():
+            try:
+                import winsound
+                winsound.Beep(*tone)
+            except Exception:
+                pass
+
+        threading.Thread(target=play, daemon=True).start()
+
+    def _page_help(self):
+        page = tk.Frame(self.pagebox, bg=BG)
         _c, _h, body = self._card(page, "사용법", None, "gear", expand=True)
         steps = [
             ("1", "기록", "기록 시작을 누르고 원하는 동작을 한 뒤 같은 키를 다시 눌러 멈춥니다."),
@@ -718,7 +942,7 @@ class MacroApp:
         for i, (num, title, desc) in enumerate(steps):
             cell = tk.Frame(grid2, bg=CARD)
             cell.grid(row=i // 2, column=i % 2, sticky="nw", padx=(0, 26), pady=(0, 8))
-            tk.Label(cell, text=num, bg=CARD, fg=ACCENT, font=MONO(10, "bold"),
+            tk.Label(cell, text=num, bg=CARD, fg=ui.ACCENT, font=MONO(10, "bold"),
                      width=3).pack(side="left", anchor="n")
             col = tk.Frame(cell, bg=CARD)
             col.pack(side="left")
@@ -740,7 +964,7 @@ class MacroApp:
     def _tip(self, page, text):
         card = Card(page, bg=CARD, outer=BG, pad=14)
         card.pack(fill="x")
-        im = ui.icon("gear", 14, ui.mix(CARD, ACCENT, 0.9), CARD)
+        im = ui.icon("gear", 14, ui.mix(CARD, ui.ACCENT, 0.9), CARD)
         lb = tk.Label(card.body, image=im, bg=CARD, bd=0)
         lb.image = im
         lb.pack(side="left", padx=(2, 10))
@@ -806,7 +1030,7 @@ class MacroApp:
             return
 
         self._update_info = info
-        self._set_update_text("새 버전 v%s 이 있습니다" % info["version"], ACCENT)
+        self._set_update_text("새 버전 v%s 이 있습니다" % info["version"], ui.ACCENT)
         self.log("새 버전 v%s 이 나왔습니다." % info["version"], "ok")
         if not FROZEN:
             self._set_update_text("새 버전 v%s (소스 실행 중이라 자동 설치는 안 됩니다)"
@@ -886,13 +1110,6 @@ class MacroApp:
         self.txt_log.delete("1.0", "end")
         self.txt_log.configure(state="disabled")
 
-    def _creator_tick(self, index, cycles):
-        """블록마다 화면을 갱신하면 빠른 창작에서 큐가 넘친다. 첫 칸과 0.12초 간격만."""
-        now = time.time()
-        if index != 0 and now - self._last_creator_tick < 0.12:
-            return
-        self._last_creator_tick = now
-        self.msgq.put(("creator_step", (index, cycles)))
 
     def _tick(self, which, count, cycles=None):
         now = time.time()
@@ -910,8 +1127,6 @@ class MacroApp:
             self.pill.set("자동 클릭 중", OK, pulse=True)
         elif self.repeater.running:
             self.pill.set("키 연타 중", OK, pulse=True)
-        elif getattr(self, "creator_runner", None) and self.creator_runner.running:
-            self.pill.set("창작 실행 중", OK, pulse=True)
         else:
             self.pill.set("대기 중", TXT_DIM, pulse=False)
 
@@ -946,19 +1161,20 @@ class MacroApp:
                         text += "   %d바퀴" % cycles
                     lbl.configure(text=text, fg=OK)
                 elif kind == "play_done":
-                    self.btn_play.config_text("재생 시작", "primary", hotkey_label(self.hotkeys["play"], short=True))
+                    self.beep("done")
+                    self.btn_play.config_text("재생 시작", "primary", self.hotkey_hint("play"))
                     self.bar.set(0)
                     self.lbl_prog.configure(text="대기 중")
                     self._idle_state()
                 elif kind == "click_done":
                     self._click_button = None
-                    self.btn_click.config_text("자동 클릭 시작", "primary", hotkey_label(self.hotkeys["click"], short=True))
+                    self.btn_click.config_text("자동 클릭 시작", "primary", self.hotkey_hint("click"))
                     self.lbl_click.configure(text="%d회 실행 후 정지" % self.clicker.count,
                                              fg=TXT_MUTE)
                     self._idle_state()
                 elif kind == "keyrep_done":
                     self._keyrep_tokens = set()
-                    self.btn_keyrep.config_text("키 연타 시작", "primary", hotkey_label(self.hotkeys["keyrep"], short=True))
+                    self.btn_keyrep.config_text("키 연타 시작", "primary", self.hotkey_hint("keyrep"))
                     done_text = "%d회 실행 후 정지" % self.repeater.count
                     if len(self.key_rows) > 1:
                         done_text = "%d바퀴 / " % self.repeater.cycles + done_text
@@ -977,18 +1193,13 @@ class MacroApp:
                     if total:
                         self._set_update_text("받는 중 %d%% (%.1f/%.1f MB)"
                                               % (got * 100 // total, got / 1048576,
-                                                 total / 1048576), ACCENT)
+                                                 total / 1048576), ui.ACCENT)
                     else:
-                        self._set_update_text("받는 중 %.1f MB" % (got / 1048576), ACCENT)
+                        self._set_update_text("받는 중 %.1f MB" % (got / 1048576), ui.ACCENT)
                 elif kind == "update_ready":
                     self._on_update_ready(payload)
                 elif kind == "update_fail":
                     self._on_update_fail(payload)
-                elif kind == "creator_step":
-                    self.creator.on_step(*payload)
-                elif kind == "creator_done":
-                    self.creator.on_done()
-                    self._idle_state()
                 elif kind == "keyrep_hold":
                     if payload and not self.repeater.running:
                         self.toggle_keyrep()
@@ -1090,7 +1301,6 @@ class MacroApp:
     def _on_hotkey(self, action):
         {"record": self.toggle_record, "play": self.toggle_play,
          "click": self.toggle_click, "keyrep": self.toggle_keyrep,
-         "build": self.creator.toggle_run,
          "stop": self.stop_all}[action]()
 
     # --- 단축키 등록 ------------------------------------------------
@@ -1185,13 +1395,11 @@ class MacroApp:
         for key, field in self.hk_fields.items():
             spec = self.hotkeys.get(key, "없음")
             field.set_text(hotkey_label(spec), dim=(spec == "없음"))
-        self.btn_rec.config_text(hint=hotkey_label(self.hotkeys["record"], short=True))
-        self.btn_play.config_text(hint=hotkey_label(self.hotkeys["play"], short=True))
-        self.btn_click.config_text(hint=hotkey_label(self.hotkeys["click"], short=True))
-        self.btn_keyrep.config_text(hint=hotkey_label(self.hotkeys["keyrep"], short=True))
-        self.btn_stop.config_text(hint=hotkey_label(self.hotkeys["stop"], short=True))
-        if hasattr(self, "creator"):
-            self.creator.btn_run.config_text(hint=self.hotkey_hint("build"))
+        self.btn_rec.config_text(hint=self.hotkey_hint("record"))
+        self.btn_play.config_text(hint=self.hotkey_hint("play"))
+        self.btn_click.config_text(hint=self.hotkey_hint("click"))
+        self.btn_keyrep.config_text(hint=self.hotkey_hint("keyrep"))
+        self.btn_stop.config_text(hint=self.hotkey_hint("stop"))
         if hasattr(self, "sg_mode"):
             self._on_mode()
         self.save_config()
@@ -1199,8 +1407,9 @@ class MacroApp:
     # ------------------------------------------------------------ 기록
     def toggle_record(self):
         if self.recorder.active:
+            self.beep("stop")
             self.events = self.recorder.stop()
-            self.btn_rec.config_text("기록 시작", "primary", hotkey_label(self.hotkeys["record"], short=True))
+            self.btn_rec.config_text("기록 시작", "primary", self.hotkey_hint("record"))
             self._update_stat()
             if self.events:
                 self.log("기록 완료: %d개 이벤트 / %.1f초  (%s)"
@@ -1218,8 +1427,9 @@ class MacroApp:
         if self.player.running:
             self.log("재생 중에는 기록할 수 없습니다.", "warn")
             return
+        self.beep("start")
         self.recorder.start(record_move=self.tg_move.get())
-        self.btn_rec.config_text("기록 중지", "danger", hotkey_label(self.hotkeys["record"], short=True))
+        self.btn_rec.config_text("기록 중지", "danger", self.hotkey_hint("record"))
         self.pill.set("기록 중", DANGER, pulse=True)
         self.log("기록 시작. 멈추려면 %s 를 누르세요." % hotkey_label(self.hotkeys["record"]))
 
@@ -1256,7 +1466,7 @@ class MacroApp:
         lead = self.st_lead.get()
         if lead > 0:
             self._lead_active = True
-            self.btn_play.config_text("대기 취소", "danger", hotkey_label(self.hotkeys["play"], short=True))
+            self.btn_play.config_text("대기 취소", "danger", self.hotkey_hint("play"))
             self.pill.set("시작 대기", WARN, pulse=True)
             self.log("%d초 뒤 재생을 시작합니다. 대상 창을 띄워 두세요." % lead)
             self._lead_countdown(lead)
@@ -1277,7 +1487,7 @@ class MacroApp:
     def _cancel_lead(self):
         self._lead_active = False
         self.btn_play.config_text("재생 시작", "primary",
-                                  hotkey_label(self.hotkeys["play"], short=True))
+                                  self.hotkey_hint("play"))
         self.lbl_prog.configure(text="대기 중")
         self.log("재생 대기를 취소했습니다.", "warn")
         self._idle_state()
@@ -1290,7 +1500,7 @@ class MacroApp:
         self.log("재생 시작: %d개 (%s)" % (len(self.events), self._breakdown(self.events)))
         if self.player.start(self.events, self.st_repeat.get(), self.sl_speed.get(),
                              self.st_gap.get()):
-            self.btn_play.config_text("재생 중지", "danger", hotkey_label(self.hotkeys["play"], short=True))
+            self.btn_play.config_text("재생 중지", "danger", self.hotkey_hint("play"))
             self.pill.set("재생 중", OK, pulse=True)
 
     # ------------------------------------------------------------ 자동 클릭
@@ -1313,7 +1523,7 @@ class MacroApp:
 
         self._click_button = btn
         if self.clicker.start(action, self.st_ci.get(), self.st_cc.get(), "자동 클릭"):
-            self.btn_click.config_text("자동 클릭 중지", "danger", hotkey_label(self.hotkeys["click"], short=True))
+            self.btn_click.config_text("자동 클릭 중지", "danger", self.hotkey_hint("click"))
             self.lbl_click.configure(text="0회 실행", fg=OK)
             self.pill.set("자동 클릭 중", OK, pulse=True)
             self.log("자동 클릭 시작: %dms 간격, %s 버튼%s"
@@ -1375,7 +1585,7 @@ class MacroApp:
             return
         self._keyrep_tokens = tokens
         if self.repeater.start(steps, self.st_kc.get(), "키 연타"):
-            self.btn_keyrep.config_text("키 연타 중지", "danger", hotkey_label(self.hotkeys["keyrep"], short=True))
+            self.btn_keyrep.config_text("키 연타 중지", "danger", self.hotkey_hint("keyrep"))
             self.lbl_keyrep.configure(text="0회 실행", fg=OK)
             self.pill.set("키 연타 중", OK, pulse=True)
             self.log("키 연타 시작: %s" % " → ".join(i["key"].get() for i in self.key_rows))
@@ -1422,7 +1632,7 @@ class MacroApp:
         if self.recorder.active:
             self.toggle_record()
             acted = True
-        for worker in (self.player, self.clicker, self.repeater, self.creator_runner):
+        for worker in (self.player, self.clicker, self.repeater):
             if worker.running:
                 worker.stop()
                 acted = True
@@ -1543,9 +1753,22 @@ class MacroApp:
         self.root.destroy()
 
 
+def apply_saved_theme():
+    """위젯을 만들기 전에 강조색·글자 크기를 반영한다."""
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as fp:
+            cfg = json.load(fp)
+    except Exception:
+        return
+    c1, c2 = ACCENTS.get(cfg.get("accent", "파랑"), ACCENTS["파랑"])
+    ui.set_theme(accent=c1, accent2=c2,
+                 font_delta=max(0, min(2, int(cfg.get("font_delta", 0) or 0))))
+
+
 def main():
     if not claim_single_instance():
         return                                 # 이미 떠 있는 창을 앞으로 올리고 끝
+    apply_saved_theme()
     root = tk.Tk()
     app = MacroApp(root)
     app._update_stat()
