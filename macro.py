@@ -24,6 +24,7 @@ from pynput import keyboard, mouse
 
 import ui_kit as ui
 import updater
+import winput
 from core import (BUTTONS, MOD_KEYS, Player, Recorder, RepeatWorker, Sender,
                   SequenceWorker, canon_name, current_mods, hotkey_label, hotkey_token,
                   is_pressed, make_spec, mouse_token, parse_combo, spec_main, spec_mods)
@@ -32,7 +33,7 @@ from ui_kit import (BG, CARD, DANGER, FIELD, LINE, MONO, OK, SIDE, TXT, TXT_DIM,
                     Slider, StatusPill, Stepper, TextField, Toggle)
 
 APP_NAME = "MacroStudio"
-APP_VER = "2.4.1"
+APP_VER = "2.4.2"
 FROZEN = getattr(sys, "frozen", False)         # exe 로 묶인 상태인지
 
 if FROZEN:
@@ -143,6 +144,36 @@ def set_autostart(on):
         return False
 
 
+def make_dpi_aware():
+    """화면 배율(125% 등)을 쓰는 PC 에서 좌표가 어긋나지 않게 한다.
+
+    이걸 안 하면 윈도우가 좌표를 가상화해서, 기록할 때 잡힌 좌표(실제 픽셀)와
+    재생할 때 옮기는 좌표(가상 픽셀)가 달라진다 -> 클릭이 엉뚱한 곳으로 간다.
+    """
+    try:
+        # 모니터별 DPI 인식 v2 (가장 정확)
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return "monitor-v2"
+    except Exception:
+        pass
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        return "monitor"
+    except Exception:
+        pass
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+        return "system"
+    except Exception:
+        return None
+
+
+def screen_size():
+    u = ctypes.windll.user32
+    return (u.GetSystemMetrics(78) or u.GetSystemMetrics(0),
+            u.GetSystemMetrics(79) or u.GetSystemMetrics(1))
+
+
 def resource(name):
     """exe 안에 같이 묶인 파일 경로 (개발 중에는 소스 폴더)."""
     base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
@@ -216,6 +247,7 @@ class MacroApp:
 
         os.makedirs(MACRO_DIR, exist_ok=True)
         self._build_ui()
+        self._check_sender()
         self._start_hotkey_listener()
         self.refresh_macro_list()
         self._pump()
@@ -383,6 +415,21 @@ class MacroApp:
         self.txt_log.tag_configure("err", foreground=DANGER)
 
     # ------------------------------------------------------------ 작은 도우미
+    def _check_sender(self):
+        """마우스 주입이 이 PC 에서 먹히는지 확인 (막혀 있으면 예전 방식으로).
+
+        지금 커서 자리로 옮겨 보는 것이라 화면에는 아무 변화가 없다.
+        키보드는 따로 판단한다 (한쪽이 막혀도 다른 쪽은 그대로 쓴다).
+        """
+        if not self.sender.use_mouse:
+            return
+        here = self.sender.position()
+        if here and not any(winput.move_to(*here) for _ in range(3)):
+            for sender in (self.sender, self.player.sender):
+                sender.use_mouse = False
+            self.log("이 PC 는 마우스 직접 주입이 막혀 있어 예전 방식으로 넣습니다. "
+                     "게임 등에서는 마우스가 안 먹힐 수 있습니다 (키보드는 그대로).", "warn")
+
     def hotkey_hint(self, action):
         """버튼 위 작은 칩에 넣을 단축키 이름."""
         return hotkey_label(self.hotkeys.get(action, "없음"), short=True)
@@ -1667,6 +1714,7 @@ class MacroApp:
             "app": APP_NAME, "version": APP_VER,
             "created": time.strftime("%Y-%m-%d %H:%M:%S"),
             "duration": self.events[-1]["t"] if self.events else 0,
+            "screen": list(screen_size()),     # 좌표는 이 화면 크기 기준이다
             "events": self.events,
         }
         try:
@@ -1703,6 +1751,12 @@ class MacroApp:
         self.macro_name = os.path.splitext(os.path.basename(path))[0]
         self._update_stat()
         self.log("불러오기 완료: %s (%d 이벤트)" % (self.macro_name, len(events)), "ok")
+        made_on = data.get("screen") if isinstance(data, dict) else None
+        now = list(screen_size())
+        if made_on and list(made_on) != now:
+            self.log("이 매크로는 %dx%d 화면에서 만들어졌습니다 (지금은 %dx%d). "
+                     "좌표가 어긋날 수 있습니다."
+                     % (made_on[0], made_on[1], now[0], now[1]), "warn")
 
     def delete_macro(self):
         sel = self.lst.curselection()
@@ -1768,6 +1822,7 @@ def apply_saved_theme():
 def main():
     if not claim_single_instance():
         return                                 # 이미 떠 있는 창을 앞으로 올리고 끝
+    make_dpi_aware()                           # 좌표가 어긋나지 않게 (Tk 만들기 전에)
     apply_saved_theme()
     root = tk.Tk()
     app = MacroApp(root)

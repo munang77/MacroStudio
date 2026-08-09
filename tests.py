@@ -5,6 +5,7 @@
 (주입기는 가짜로 갈아 끼우고, 업데이트 확인은 네트워크를 타지 않게 막는다)
 """
 
+import ctypes
 import json
 import os
 import sys
@@ -287,9 +288,39 @@ def test_app():
         os.remove(macro.CONFIG_PATH)
 
 
+# ---------------------------------------------------------------- 7. 좌표·주입
+def test_coords():
+    section("좌표와 입력 주입")
+    mode = macro.make_dpi_aware()
+    check("화면 배율 인식 설정", mode is not None, mode)
+    aware = ctypes.c_int()
+    try:
+        ctypes.windll.shcore.GetProcessDpiAwareness(None, ctypes.byref(aware))
+        check("가상화되지 않음 (좌표 어긋남 방지)", aware.value >= 1, aware.value)
+    except Exception as exc:
+        check("가상화되지 않음 (좌표 어긋남 방지)", False, exc)
+
+    w, h = macro.screen_size()
+    check("화면 크기를 읽음", w > 100 and h > 100, (w, h))
+
+    import winput
+    here = winput.cursor_pos()
+    check("커서 위치를 읽음", here is not None, here)
+
+    # 주입기는 SendInput 이 막혀 있어도 예전 방식으로 반드시 움직여야 한다
+    s = core.Sender()
+    target = (here[0] + 60, here[1])
+    s.move(*target)
+    time.sleep(0.08)
+    now = winput.cursor_pos()
+    s.move(*here)
+    check("주입기가 실제로 커서를 옮김", abs(now[0] - target[0]) <= 2, (target, now))
+
+
 def main():
     t0 = time.perf_counter()
-    for fn in (test_keys, test_recorder, test_player, test_workers, test_updater, test_app):
+    for fn in (test_keys, test_recorder, test_player, test_workers, test_updater,
+               test_coords, test_app):
         fn()
     print("\n%d초 걸림." % round(time.perf_counter() - t0),
           "실패: " + (", ".join(FAILS) if FAILS else "없음"))

@@ -334,22 +334,27 @@ class Sender:
     """
 
     def __init__(self, use_winput=True):
-        self.use = bool(use_winput and winput.AVAILABLE)
+        # 마우스/키보드를 따로 둔다: 한쪽이 막혀 있어도 다른 쪽은 그대로 쓴다
+        self.use_mouse = self.use_key = bool(use_winput and winput.AVAILABLE)
         self.mouse = mouse.Controller()
         self.kb = keyboard.Controller()
 
+    @property
+    def use(self):
+        return self.use_mouse or self.use_key
+
     # --- 마우스 ---------------------------------------------------
     def position(self):
-        return winput.cursor_pos() if self.use else self.mouse.position
+        return winput.cursor_pos() if self.use_mouse else self.mouse.position
 
     def move(self, x, y):
-        if self.use and winput.move_to(x, y):
+        if self.use_mouse and winput.move_to(x, y):
             return
         self.mouse.position = (int(x), int(y))
 
     def click(self, name, down, x=None, y=None):
         """이동과 누름을 한 번에 보낸다 (따로 보내면 눌린 위치가 어긋날 수 있다)."""
-        if self.use and winput.button(name, down, x, y):
+        if self.use_mouse and winput.button(name, down, x, y):
             return
         if x is not None:
             self.mouse.position = (int(x), int(y))
@@ -357,7 +362,7 @@ class Sender:
         (self.mouse.press if down else self.mouse.release)(btn)
 
     def scroll(self, dx, dy):
-        if self.use and winput.wheel(dx, dy):
+        if self.use_mouse and winput.wheel(dx, dy):
             return
         self.mouse.scroll(dx, dy)
 
@@ -375,7 +380,7 @@ class Sender:
         return None
 
     def key(self, key_obj, down):
-        if self.use:
+        if self.use_key:
             vk = self._vk_of(key_obj)
             if vk and winput.key_vk(vk, down):
                 return
