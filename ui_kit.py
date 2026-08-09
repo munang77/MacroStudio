@@ -854,7 +854,9 @@ class StatusPill(tk.Canvas):
             if self._pulse:
                 self._phase += 1
                 self._draw()
-            self.after(70, self._tick)
+                self.after(70, self._tick)
+            else:
+                self.after(300, self._tick)    # 쉬는 중엔 자주 깨어날 이유가 없다
         except tk.TclError:            # 창이 닫히는 중이면 조용히 종료
             return
 

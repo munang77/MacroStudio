@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 
 $AppName = 'MacroStudio'
-$Version = '2.4'
+$Version = '2.4.1'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $source = Join-Path $here "$AppName.exe"
 $target = Join-Path $InstallRoot $AppName

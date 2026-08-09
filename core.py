@@ -418,11 +418,12 @@ class Player:
         self._stop.set()
 
     def _sleep_until(self, when):
+        """긴 대기는 성글게, 목표 시각이 가까워지면 촘촘히 (헛되이 깨어나지 않게)."""
         while True:
             remain = when - time.perf_counter()
             if remain <= 0 or self._stop.is_set():
                 return
-            time.sleep(min(remain, 0.005))
+            time.sleep(min(remain, 0.02 if remain > 0.05 else 0.002))
 
     def _approach(self, target_time, pos):
         """다음 지점까지 남은 시간 동안 커서를 미끄러지듯 옮긴다 (순간이동 방지)."""
@@ -569,12 +570,15 @@ class SequenceWorker:
         self._stop.set()
 
     def _wait(self, seconds):
+        """긴 간격은 성글게 기다린다 (정지 반응은 20ms 안)."""
         end = time.perf_counter() + seconds
-        while time.perf_counter() < end:
+        while True:
+            remain = end - time.perf_counter()
+            if remain <= 0:
+                return True
             if self._stop.is_set():
                 return False
-            time.sleep(min(0.005, max(0.001, seconds)))
-        return True
+            time.sleep(min(remain, 0.02 if remain > 0.05 else 0.002))
 
     def _run(self, steps, loops, label):
         try:
@@ -639,8 +643,11 @@ class RepeatWorker:
                 if count and self.count >= count:
                     break
                 end = time.perf_counter() + interval
-                while time.perf_counter() < end and not self._stop.is_set():
-                    time.sleep(min(0.005, interval))
+                while not self._stop.is_set():
+                    remain = end - time.perf_counter()
+                    if remain <= 0:
+                        break
+                    time.sleep(min(remain, 0.02 if remain > 0.05 else 0.002))
         except Exception as exc:
             self.log("%s 오류: %s" % (label, exc))
         finally:

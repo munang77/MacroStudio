@@ -26,9 +26,18 @@ def run(cmd):
 def main():
     run([sys.executable, "make_icon.py"])
 
-    run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean",
-         "--onefile", "--windowed", "--name", APP, "--icon", "icon.ico",
-         "--add-data", "icon.ico;.", "macro.py"])
+    # 안 쓰는데 딸려 들어오는 것들 (numpy 26MB, AVIF 코덱 7.5MB 등)
+    excludes = ["numpy", "PIL._avif", "PIL.AvifImagePlugin", "PIL._imagingft",
+                "PIL.ImageQt", "PIL.ImageShow", "PIL.ImageGrab", "PIL.ImageCms",
+                "PIL._imagingcms", "PIL.ImageTk.tkinter", "scipy", "pandas",
+                "matplotlib", "pytest", "setuptools", "pip", "unittest",
+                "pydoc", "doctest", "xmlrpc", "sqlite3", "curses"]
+    cmd = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean",
+           "--onefile", "--windowed", "--name", APP, "--icon", "icon.ico",
+           "--add-data", "icon.ico;."]
+    for mod in excludes:
+        cmd += ["--exclude-module", mod]
+    run(cmd + ["macro.py"])
 
     exe = os.path.join(HERE, "dist", APP + ".exe")
     if not os.path.exists(exe):

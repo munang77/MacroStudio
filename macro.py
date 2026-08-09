@@ -32,7 +32,7 @@ from ui_kit import (BG, CARD, DANGER, FIELD, LINE, MONO, OK, SIDE, TXT, TXT_DIM,
                     Slider, StatusPill, Stepper, TextField, Toggle)
 
 APP_NAME = "MacroStudio"
-APP_VER = "2.4"
+APP_VER = "2.4.1"
 FROZEN = getattr(sys, "frozen", False)         # exe 로 묶인 상태인지
 
 if FROZEN:
