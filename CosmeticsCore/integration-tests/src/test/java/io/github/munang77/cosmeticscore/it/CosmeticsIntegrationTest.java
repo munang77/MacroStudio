@@ -341,6 +341,31 @@ class CosmeticsIntegrationTest {
     }
 
     @Test
+    void relogDoesNotResetPreviewCooldown() {
+        PlayerMock p = server.addPlayer();
+        p.performCommand("cos 미리보기 red_wings");
+        p.disconnect();
+        p.reconnect();
+        drain(p);
+        p.performCommand("cos 미리보기 angel_wings");
+        assertTrue(said(drain(p), "초 뒤에 다시"), "다시 들어와도 대기 시간이 남아 있어야 함");
+    }
+
+    @Test
+    void hatHidesWhileInvisible() {
+        PlayerMock p = server.addPlayer();
+        p.performCommand("cos equip pumpkin_head");
+        assertTrue(isHat(p.getInventory().getHelmet()));
+        p.setInvisible(true);
+        server.getScheduler().performTicks(100);
+        assertNull(p.getInventory().getHelmet(), "투명화 중에는 모자가 위치를 드러내면 안 됨");
+        p.setInvisible(false);
+        server.getScheduler().performTicks(100);
+        assertTrue(isHat(p.getInventory().getHelmet()), "투명화가 풀리면 다시 씌워야 함");
+        assertEquals("pumpkin_head", plugin.store().get(p.getUniqueId()).equipped(Category.HAT));
+    }
+
+    @Test
     void titlePreviewIsPrivate() {
         PlayerMock p = server.addPlayer();
         PlayerMock other = server.addPlayer("Other");

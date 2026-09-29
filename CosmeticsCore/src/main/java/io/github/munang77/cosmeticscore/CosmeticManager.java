@@ -274,8 +274,8 @@ public final class CosmeticManager {
 
     /** 나갈 때. */
     public void handleQuit(Player player) {
+        // lastPreview 는 남겨 둔다: 다시 들어와서 대기 시간을 초기화하지 못하게
         previews.remove(player.getUniqueId());
-        lastPreview.remove(player.getUniqueId());
     }
 
     /** 모자, 탭 이름, 몸에 붙는 장식을 착용 정보에 맞춘다. */
@@ -428,6 +428,8 @@ public final class CosmeticManager {
             }
         }
         previews.values().removeIf(Map::isEmpty);
+        long cooldown = plugin.settings().previewCooldownSeconds() * 20L;
+        lastPreview.values().removeIf(at -> now - at >= cooldown);
         if (now % 1200 == 0) {
             plugin.store().sweepStaleLogins();
         }

@@ -17,12 +17,14 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
@@ -138,7 +140,8 @@ public final class HatService implements Listener {
      */
     public void refresh(Player player) {
         removeStrays(player);
-        HatCosmetic want = plugin.settings().isDisabled(player.getWorld())
+        // 투명화·바니시 중에 모자만 떠 있으면 위치가 드러나므로 숨긴다 (꺼진 월드도 여기서 걸린다)
+        HatCosmetic want = plugin.manager().isHidden(player)
                 ? null : plugin.manager().equipped(player, Category.HAT, HatCosmetic.class);
         PlayerInventory inv = player.getInventory();
         ItemStack helmet = inv.getHelmet();
@@ -289,5 +292,18 @@ public final class HatService implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onWorldChange(PlayerChangedWorldEvent event) {
         refresh(event.getPlayer());
+    }
+
+    /** 투명화 물약을 마시거나 풀리면 다음 틱에 모자를 숨기거나 되돌린다. */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPotion(EntityPotionEffectEvent event) {
+        if (event.getEntity() instanceof Player player) {
+            refreshLater(player);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onGameMode(PlayerGameModeChangeEvent event) {
+        refreshLater(event.getPlayer());
     }
 }
