@@ -4,16 +4,34 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
-/** 접속하면 데이터를 읽고, 나가면 모자를 벗기고 저장한다. */
+/** 로그인할 때 데이터를 미리 읽고, 들어오면 적용하고, 나가면 모자를 벗기고 저장한다. */
 final class PlayerListener implements Listener {
 
     private final CosmeticsCore plugin;
 
     PlayerListener(CosmeticsCore plugin) {
         this.plugin = plugin;
+    }
+
+    /** 로그인 스레드에서 읽어 두므로 저장소가 느려도 서버 틱이 멈추지 않는다. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPreLogin(AsyncPlayerPreLoginEvent event) {
+        if (event.getLoginResult() == AsyncPlayerPreLoginEvent.Result.ALLOWED) {
+            plugin.store().preload(event.getUniqueId(), event.getName());
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onLogin(PlayerLoginEvent event) {
+        if (event.getResult() != PlayerLoginEvent.Result.ALLOWED) {
+            plugin.store().release(event.getPlayer().getUniqueId());
+        }
     }
 
     @EventHandler(priority = EventPriority.LOWEST)

@@ -42,7 +42,9 @@ public final class Settings {
     private final boolean titleTabList;
     private final boolean joinMessages;
     private final boolean killMessages;
+    private final boolean previewEnabled;
     private final int previewSeconds;
+    private final int previewCooldownSeconds;
     private final boolean crateEnabled;
     private final double cratePrice;
     private final Set<String> crateBroadcast = new HashSet<>();
@@ -67,7 +69,9 @@ public final class Settings {
         titleTabList = c.getBoolean("titles.tab-list", true);
         joinMessages = c.getBoolean("messages.join-effects", true);
         killMessages = c.getBoolean("messages.kill-messages", true);
+        previewEnabled = c.getBoolean("preview.enabled", true);
         previewSeconds = Math.max(1, Math.min(120, c.getInt("preview.seconds", 10)));
+        previewCooldownSeconds = Math.max(0, c.getInt("preview.cooldown-seconds", 30));
         crateEnabled = c.getBoolean("crate.enabled", true);
         cratePrice = Math.max(0, c.getDouble("crate.price", 0));
         for (String r : c.getStringList("crate.broadcast-rarities")) {
@@ -179,8 +183,17 @@ public final class Settings {
         return killMessages;
     }
 
+    public boolean previewEnabled() {
+        return previewEnabled;
+    }
+
     public int previewSeconds() {
         return previewSeconds;
+    }
+
+    /** 잠긴 코스메틱을 다시 미리 보려면 기다려야 하는 시간 (가진 코스메틱은 제한 없음). */
+    public int previewCooldownSeconds() {
+        return previewCooldownSeconds;
     }
 
     public boolean crateEnabled() {

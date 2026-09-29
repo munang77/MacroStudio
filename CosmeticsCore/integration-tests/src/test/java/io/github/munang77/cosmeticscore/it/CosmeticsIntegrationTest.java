@@ -69,6 +69,13 @@ class CosmeticsIntegrationTest {
         return messages.stream().anyMatch(m -> org.bukkit.ChatColor.stripColor(m).contains(part));
     }
 
+    /** 저장소 스레드의 작업과 그 뒤 메인 스레드 처리까지 끝낸다. */
+    private void settle() {
+        server.getScheduler().waitAsyncTasksFinished();
+        plugin.store().flush();
+        server.getScheduler().performTicks(1);
+    }
+
     private boolean isHat(ItemStack item) {
         return plugin.hats().isHat(item);
     }
@@ -202,11 +209,18 @@ class CosmeticsIntegrationTest {
         admin.setOp(true);
         PlayerMock p = server.addPlayer("Steve");
         admin.performCommand("cos 지급 Steve crown");
+        settle();
         assertTrue(said(drain(p), "새 코스메틱"));
         p.performCommand("cos equip crown");
         assertTrue(isHat(p.getInventory().getHelmet()));
         admin.performCommand("cos 회수 Steve crown");
+        settle();
         assertNull(p.getInventory().getHelmet(), "회수하면 벗겨져야 함");
+
+        // 같은 지급을 두 번 해도 한 번만 들어간다 (열쇠)
+        admin.performCommand("cos 열쇠 Steve 3");
+        settle();
+        assertEquals(3, plugin.store().get(p.getUniqueId()).keys());
 
         // 접속하지 않은 플레이어에게 지급
         p.disconnect();
@@ -302,8 +316,66 @@ class CosmeticsIntegrationTest {
         server.getScheduler().performTicks(5);
     }
 
+    private void noPreviewCooldown() {
+        plugin.getConfig().set("preview.cooldown-seconds", 0);
+        plugin.saveConfig();
+        plugin.reload();
+    }
+
+    @Test
+    void previewCooldownBlocksEndlessFreeUse() {
+        PlayerMock p = server.addPlayer();
+        p.performCommand("cos 미리보기 red_wings");
+        drain(p);
+        p.performCommand("cos 미리보기 angel_wings");
+        assertTrue(said(drain(p), "초 뒤에 다시"), "잠긴 코스메틱은 대기 시간이 있어야 함");
+        assertSame(plugin.registry().get("red_wings"), plugin.manager().equipped(p, Category.PARTICLE));
+        // 가진 코스메틱(무료)은 제한 없이 볼 수 있다
+        p.performCommand("cos 미리보기 heart_aura");
+        assertFalse(said(drain(p), "초 뒤에 다시"));
+        // 30초가 지나면 다시 된다
+        server.getScheduler().performTicks(20 * 31);
+        drain(p);
+        p.performCommand("cos 미리보기 angel_wings");
+        assertFalse(said(drain(p), "초 뒤에 다시"));
+    }
+
+    @Test
+    void titlePreviewIsPrivate() {
+        PlayerMock p = server.addPlayer();
+        PlayerMock other = server.addPlayer("Other");
+        p.performCommand("cos 미리보기 king");
+        assertTrue(said(drain(p), "[왕]"), "본인에게 예시가 보여야 함");
+        assertEquals(p.getName(), p.getPlayerListName(), "탭 이름은 바뀌면 안 됨");
+        assertNull(plugin.manager().equipped(p, Category.TITLE), "채팅에 칭호가 붙으면 안 됨");
+        assertFalse(said(drain(other), "[왕]"));
+    }
+
+    @Test
+    void cursedHelmetIsNotRemoved() {
+        PlayerMock p = server.addPlayer();
+        ItemStack cursed = new ItemStack(Material.IRON_HELMET);
+        cursed.addUnsafeEnchantment(org.bukkit.enchantments.Enchantment.BINDING_CURSE, 1);
+        p.getInventory().setHelmet(cursed);
+        p.performCommand("cos equip pumpkin_head");
+        assertEquals(Material.IRON_HELMET, p.getInventory().getHelmet().getType(), "귀속 저주 투구는 그대로여야 함");
+        assertTrue(said(drain(p), "귀속 저주"));
+    }
+
+    @Test
+    void doubleClickDoesNotConfirmPurchaseOrToggleTwice() {
+        PlayerMock p = server.addPlayer();
+        p.performCommand("cos 풍선");
+        // 첫 칸 = red_balloon (무료)
+        p.simulateInventoryClick(p.getOpenInventory(), ClickType.LEFT, 10);
+        p.simulateInventoryClick(p.getOpenInventory(), ClickType.DOUBLE_CLICK, 10);
+        assertEquals("red_balloon", plugin.store().get(p.getUniqueId()).equipped(Category.BALLOON),
+                "더블클릭이 해제로 이어지면 안 됨");
+    }
+
     @Test
     void previewIsTemporaryAndNotSaved() {
+        noPreviewCooldown();
         PlayerMock p = server.addPlayer();
         Cosmetic wings = plugin.registry().get("red_wings");
         assertFalse(plugin.manager().owns(p, wings));
@@ -326,6 +398,7 @@ class CosmeticsIntegrationTest {
 
     @Test
     void oneShotPreviewsWork() {
+        noPreviewCooldown();
         PlayerMock p = server.addPlayer();
         for (String id : List.of("firework", "blood", "lightning", "lesson", "royal_join", "flame_arrow", "sunset_chat")) {
             p.performCommand("cos preview " + id);
@@ -334,7 +407,7 @@ class CosmeticsIntegrationTest {
         List<String> said = drain(p);
         assertTrue(said(said, "참교육"), "킬 메시지 미리보기");
         assertTrue(said(said, "행차"), "입장 메시지 미리보기");
-        assertTrue(said(said, "채팅 색 미리보기"), "채팅 색 미리보기");
+        assertTrue(said(said, "[미리보기]") && said(said, "미리보기입니다"), "채팅 색 미리보기");
     }
 
     @Test
@@ -346,6 +419,7 @@ class CosmeticsIntegrationTest {
         assertTrue(said(drain(p), "열쇠가 없습니다"));
 
         admin.performCommand("cos 열쇠 Lucky 2");
+        settle();
         PlayerData data = plugin.store().get(p.getUniqueId());
         assertEquals(2, data.keys());
         int before = data.unlocked().size();
@@ -365,6 +439,7 @@ class CosmeticsIntegrationTest {
         admin.setOp(true);
         PlayerMock p = server.addPlayer("Collector");
         admin.performCommand("cos 열쇠 Collector 100");
+        settle();
         int pool = plugin.crates().candidates(p).size();
         for (int i = 0; i < pool; i++) {
             p.performCommand("cos 뽑기");

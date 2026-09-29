@@ -12,6 +12,9 @@
 storage:
   type: YAML
   table: cosmeticscore_players
+  # 로그인할 때 데이터를 읽기 전에 기다릴 시간(ms). 서버를 옮길 때 이전 서버의 저장이 먼저 끝나게 합니다
+  # (적지 않으면 MYSQL 은 300, 나머지는 0)
+  # login-delay-ms: 300
   mysql:
     host: localhost
     port: 3306
@@ -58,8 +61,12 @@ messages:
   kill-messages: true
 
 preview:
+  enabled: true
   # 메뉴에서 우클릭하면 잠긴 코스메틱도 이 시간(초) 동안 입어 볼 수 있습니다
+  # (모자·백팩·풍선·펫·파티클. 칭호·채팅 색·메시지는 본인에게만 예시를 보여 줍니다)
   seconds: 10
+  # 잠긴 코스메틱을 다시 미리 보려면 기다려야 하는 시간(초). 계속 미리보기로 공짜로 쓰는 것을 막습니다
+  cooldown-seconds: 30
 
 # 코스메틱 뽑기 (/cos 뽑기, 메인 메뉴 가운데 상자)
 #   열쇠(/cos 열쇠 <플레이어> <개수>)가 있으면 열쇠를 쓰고, 없으면 price 만큼 돈을 냅니다 (Vault 필요)

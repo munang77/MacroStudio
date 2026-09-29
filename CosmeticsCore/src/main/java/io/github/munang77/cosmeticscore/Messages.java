@@ -22,12 +22,17 @@ public final class Messages {
         if (defaults != null) {
             yaml.setDefaults(YamlConfiguration.loadConfiguration(new InputStreamReader(defaults, StandardCharsets.UTF_8)));
         }
-        this.prefix = Text.color(yaml.getString("prefix", ""));
+        String rawPrefix = yaml.getString("prefix");
+        this.prefix = Text.color(rawPrefix == null ? "" : rawPrefix);
     }
 
-    /** 색이 입혀지고 자리표시자가 채워진 문구. */
+    /**
+     * 색이 입혀지고 자리표시자가 채워진 문구. 기본값을 주는 {@code getString(path, def)} 은 플러그인 기본 문구를
+     * 무시하므로 쓰지 않는다 (예전 messages.yml 에 새 문구가 없어도 기본 문구가 나와야 한다).
+     */
     public String get(String path, String... pairs) {
-        return Text.replace(Text.color(yaml.getString(path, path)), pairs);
+        String raw = yaml.getString(path);
+        return Text.replace(Text.color(raw == null ? path : raw), pairs);
     }
 
     public List<String> list(String path, String... pairs) {
@@ -55,6 +60,7 @@ public final class Messages {
 
     /** 카테고리 표시 이름 (색 없음). */
     public String category(Category category) {
-        return Text.plain(yaml.getString("categories." + category.key(), category.key()));
+        String raw = yaml.getString("categories." + category.key());
+        return Text.plain(raw == null ? category.key() : raw);
     }
 }

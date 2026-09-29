@@ -10,6 +10,7 @@ import io.github.munang77.cosmeticscore.cosmetic.HatCosmetic;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
@@ -47,7 +48,9 @@ public final class HatService implements Listener {
         /** 투구를 쓰고 있고, 옮기지 않도록 설정돼 있다. */
         BLOCKED,
         /** 투구를 옮길 빈칸이 없다. */
-        INVENTORY_FULL
+        INVENTORY_FULL,
+        /** 귀속 저주가 걸린 투구라 벗길 수 없다. */
+        CURSED
     }
 
     private static final long WARN_COOLDOWN_MS = 3000;
@@ -113,6 +116,9 @@ public final class HatService implements Listener {
         ItemStack helmet = inv.getHelmet();
         if (helmet == null || helmet.getType().isAir() || isHat(helmet)) {
             return Room.FREE;
+        }
+        if (helmet.containsEnchantment(Enchantment.BINDING_CURSE)) {
+            return Room.CURSED;
         }
         if (!plugin.settings().moveHelmetToInventory()) {
             return Room.BLOCKED;

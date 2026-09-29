@@ -126,6 +126,21 @@ public final class PlayerData {
         return true;
     }
 
+    /**
+     * 다른 데이터(옮겨 오는 YAML)를 합친다. 지급 목록은 합치고, 비어 있는 착용 칸만 채우고,
+     * 열쇠는 큰 쪽을 쓴다. 그래서 같은 데이터를 두 번 합쳐도 결과가 같다.
+     */
+    public synchronized void mergeFrom(PlayerData other) {
+        unlocked.addAll(other.unlocked);
+        for (Map.Entry<Category, String> e : other.equipped.entrySet()) {
+            equipped.putIfAbsent(e.getKey(), e.getValue());
+        }
+        keys = Math.max(keys, other.keys);
+        if (lastName == null) {
+            lastName = other.lastName;
+        }
+    }
+
     // ── 저장 형식 ──
 
     /** YAML 문자열로 만든다. 메인 스레드에서 스냅숏을 뜬 뒤 파일 쓰기는 다른 스레드에 맡긴다. */

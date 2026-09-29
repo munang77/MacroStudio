@@ -53,7 +53,11 @@ public class CosmeticsCore extends JavaPlugin {
         saveIfMissing("cosmetics.yml");
         saveIfMissing("messages.yml");
 
-        store = new DataStore(createStorage(), getLogger());
+        Storage storage = createStorage();
+        // MySQL 을 서버 여러 대가 같이 쓰면, 서버를 옮길 때 이전 서버의 저장이 먼저 끝나도록 잠깐 기다렸다가 읽는다
+        long loginDelay = getConfig().getLong("storage.login-delay-ms",
+                storage instanceof SqlStorage sql && sql.shared() ? 300 : 0);
+        store = new DataStore(storage, getLogger(), loginDelay);
         manager = new CosmeticManager(this);
         hats = new HatService(this);
         chat = new ChatService(this);

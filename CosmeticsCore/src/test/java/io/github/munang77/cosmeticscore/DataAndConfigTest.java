@@ -171,7 +171,8 @@ class DataAndConfigTest {
     @Test
     void bundledMessagesHaveEveryKey() throws Exception {
         YamlConfiguration yaml = bundled("messages.yml");
-        for (String key : List.of("prefix", "hat-protected", "hat-blocks-helmet",
+        for (String key : List.of("prefix", "hat-protected", "hat-blocks-helmet", "helmet-cursed",
+                "preview-cooldown", "preview-disabled", "preview-chat-format",
                 "already-have", "already-owned", "cancelled", "confirm-purchase", "crate-broadcast",
                 "crate-complete", "crate-disabled", "crate-no-key", "crate-no-money", "crate-title", "crate-won",
                 "disabled-world", "economy-missing", "equipped", "given", "given-target", "helmet-blocked",

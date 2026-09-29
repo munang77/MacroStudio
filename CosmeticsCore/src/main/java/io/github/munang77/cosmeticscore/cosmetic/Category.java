@@ -25,9 +25,12 @@ public enum Category {
         return this == BACKPACK || this == BALLOON || this == PET;
     }
 
-    /** 착용해 두면 계속 보이는 카테고리 (미리보기를 일정 시간 걸어 둘 수 있다). */
-    public boolean isPersistentLook() {
-        return this == HAT || isDisplay() || this == PARTICLE || this == TITLE || this == CHAT_COLOR;
+    /**
+     * 미리보기를 몇 초 동안 걸어 두는 카테고리 (몸에 보이는 것). 칭호/채팅 색처럼 채팅에 남는 것은
+     * 남들에게 보이지 않게 본인에게만 예시를 보여 준다.
+     */
+    public boolean isTimedPreview() {
+        return this == HAT || isDisplay() || this == PARTICLE;
     }
 
     private final String key;

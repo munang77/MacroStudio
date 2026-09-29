@@ -134,6 +134,11 @@ public final class SqlStorage implements Storage {
         }
     }
 
+    /** 서버 여러 대가 같이 쓸 수 있는 저장소(MySQL)인지. */
+    public boolean shared() {
+        return mysql;
+    }
+
     @Override
     public String describe() {
         return (mysql ? "MySQL" : "SQLite") + " (" + table + ")";

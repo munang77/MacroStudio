@@ -286,8 +286,10 @@ public final class CosmeticsCommand implements TabExecutor {
     }
 
     /**
-     * 접속 중이면 메모리에서, 아니면 저장소에서 바로 고친다.
+     * 플레이어 데이터를 고친다. 실제 수정은 저장소 스레드에서 한 번만 하므로(접속 중이면 메모리 데이터,
+     * 아니면 저장소) 접속·퇴장과 겹쳐도 두 번 적용되거나 사라지지 않는다.
      *
+     * @param edit       스레드에 안전한 동작만 한다 (지급/회수/열쇠)
      * @param revalidate 고친 뒤 착용 정보를 다시 확인할지 (회수)
      */
     private void edit(CommandSender sender, String targetName, Predicate<PlayerData> edit,
@@ -295,53 +297,46 @@ public final class CosmeticsCommand implements TabExecutor {
         Messages msg = plugin.messages();
         Player online = Bukkit.getPlayerExact(targetName);
         if (online != null) {
-            PlayerData data = plugin.store().get(online.getUniqueId());
-            if (data == null || data.readOnly()) {
-                msg.send(sender, "player-not-found", "player", targetName);
-                return;
-            }
-            boolean changed = edit.test(data);
-            if (changed) {
-                plugin.store().save(data);
-                if (revalidate) {
-                    plugin.manager().validate(online);
-                    plugin.manager().applyVisuals(online);
-                }
-            }
-            done.accept(online.getName(), changed);
+            apply(sender, online.getUniqueId(), online.getName(), targetName, edit, done, revalidate);
             return;
         }
-
-        // 접속하지 않은 플레이어: 이름 조회(느릴 수 있음)와 데이터 수정은 백그라운드에서
+        // 접속하지 않은 플레이어: 이름 조회는 느릴 수 있어서 백그라운드에서
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             @SuppressWarnings("deprecation")
             OfflinePlayer target = Bukkit.getOfflinePlayer(targetName);
-            if (!target.hasPlayedBefore() && !target.isOnline()) {
-                Bukkit.getScheduler().runTask(plugin, () -> msg.send(sender, "player-not-found", "player", targetName));
-                return;
-            }
             UUID uuid = target.getUniqueId();
             String name = target.getName() != null ? target.getName() : targetName;
-            plugin.store().editOffline(uuid, edit).whenComplete((changed, error) ->
-                    Bukkit.getScheduler().runTask(plugin, () -> {
-                        if (error != null) {
-                            plugin.getLogger().warning(name + " 의 데이터를 고치지 못했습니다: " + error.getMessage());
-                            msg.send(sender, "player-not-found", "player", targetName);
-                            return;
-                        }
-                        // 그 사이에 접속했다면 메모리에 있는 데이터에도 똑같이 반영한다
-                        PlayerData live = plugin.store().get(uuid);
-                        Player now = Bukkit.getPlayer(uuid);
-                        if (live != null && now != null && edit.test(live)) {
-                            plugin.store().save(live);
-                            if (revalidate) {
-                                plugin.manager().validate(now);
-                                plugin.manager().applyVisuals(now);
-                            }
-                        }
-                        done.accept(name, changed);
-                    }));
+            if (target.hasPlayedBefore() || target.isOnline()) {
+                apply(sender, uuid, name, targetName, edit, done, revalidate);
+                return;
+            }
+            // 이 서버에는 처음이지만 같은 저장소(MySQL)를 쓰는 다른 서버에 들어온 적이 있으면 된다
+            plugin.store().exists(uuid).whenComplete((exists, error) -> {
+                if (Boolean.TRUE.equals(exists)) {
+                    apply(sender, uuid, name, targetName, edit, done, revalidate);
+                } else {
+                    Bukkit.getScheduler().runTask(plugin, () -> msg.send(sender, "player-not-found", "player", targetName));
+                }
+            });
         });
+    }
+
+    private void apply(CommandSender sender, UUID uuid, String name, String typed, Predicate<PlayerData> edit,
+                       BiConsumer<String, Boolean> done, boolean revalidate) {
+        plugin.store().edit(uuid, edit).whenComplete((changed, error) ->
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (error != null) {
+                        plugin.getLogger().warning(name + " 의 데이터를 고치지 못했습니다: " + error.getMessage());
+                        plugin.messages().send(sender, "player-not-found", "player", typed);
+                        return;
+                    }
+                    Player now = Bukkit.getPlayer(uuid);
+                    if (now != null && changed && revalidate) {
+                        plugin.manager().validate(now);
+                        plugin.manager().applyVisuals(now);
+                    }
+                    done.accept(name, changed);
+                }));
     }
 
     private void migrate(CommandSender sender) {
