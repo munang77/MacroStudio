@@ -1,0 +1,410 @@
+# ─────────────────────────────────────────────
+#  CosmeticsCore 코스메틱 목록
+#
+#  아이디(예: crown)는 모든 카테고리를 통틀어 겹치면 안 됩니다 (영문 소문자, 숫자, _, -).
+#
+#  공통 항목
+#    name        메뉴에 보일 이름 (&색코드, &#RRGGBB 지원)
+#    lore        메뉴 설명 줄 목록
+#    icon        메뉴 아이콘 아이템 (모자/백팩/풍선/펫은 생략하면 그 아이템 모양 그대로)
+#    icon-model-data / icon-item-model / icon-texture   아이콘 리소스팩 모델, 머리 텍스처
+#    rarity      등급 (config.yml 의 rarities: common, rare, epic, legendary)
+#    price       가격. 0 보다 크면 메뉴에서 Vault 돈으로 살 수 있습니다
+#    free        true 면 누구나 사용 (기본 false)
+#    crate       false 면 뽑기에서 안 나옵니다 (기본: free 가 아니면 나옴)
+#    permission  사용 권한 (기본 cosmeticscore.cosmetic.<아이디>)
+#
+#  사용 조건: free 이거나, 권한이 있거나, 지급/구매/뽑기로 얻었거나
+#  OP 는 cosmeticscore.cosmetic.all 로 전부 쓸 수 있습니다.
+#
+#  아이템 모양 (모자·백팩·풍선·펫)
+#    material           아이템 이름
+#    custom-model-data  리소스팩 모델 번호
+#    item-model         1.21.2+ 아이템 모델 키, 예: "myserver:crown"
+#    texture            플레이어 머리 텍스처 (textures.minecraft.net 주소, 해시, 또는 base64 Value)
+#                       texture 만 적으면 material 은 자동으로 PLAYER_HEAD
+#
+#  파티클 이름은 https://jd.papermc.io/paper/org/bukkit/Particle.html 참고
+#    DUST 계열은 color("#RRGGBB"), size 를 쓰고, rainbow: true 면 무지개색으로 바뀝니다
+#    BLOCK 계열은 block: REDSTONE_BLOCK 처럼 블록을 적습니다
+# ─────────────────────────────────────────────
+
+# ── 모자 : 머리 칸에 씌워지는 장식 아이템 (방어력 없음, 벗기거나 버릴 수 없음)
+hats:
+  crown:
+    name: "&6&l왕관"
+    lore:
+      - "&7반짝이는 황금 왕관"
+    material: GOLDEN_HELMET
+    rarity: epic
+    price: 30000
+  pumpkin_head:
+    name: "&6호박 머리"
+    lore:
+      - "&7할로윈 분위기"
+    material: CARVED_PUMPKIN
+    free: true
+  astronaut:
+    name: "&b우주인 헬멧"
+    lore:
+      - "&7숨은 쉴 수 있어요"
+    material: GLASS
+    rarity: rare
+    price: 10000
+  tnt_head:
+    name: "&c폭탄 머리"
+    lore:
+      - "&7터지지는 않습니다"
+    material: TNT
+    price: 5000
+  melon_head:
+    name: "&a수박 머리"
+    material: MELON
+    price: 3000
+  # 리소스팩/머리 텍스처 예시
+  # custom_crown:
+  #   name: "&e커스텀 왕관"
+  #   material: PAPER
+  #   custom-model-data: 1001
+  # head_hat:
+  #   name: "&d귀여운 머리"
+  #   texture: "http://textures.minecraft.net/texture/<해시>"
+
+# ── 백팩 : 등에 붙어 다니는 장식 (다른 사람도 보임, 텔레포트·탈것 방해 없음)
+#   scale     크기 (기본 0.6)
+#   offset-y  높이 조절
+#   cycle     아이템 목록을 적으면 cycle-ticks 마다 번갈아 보여 줍니다
+backpacks:
+  chest_backpack:
+    name: "&6보물 상자 가방"
+    lore:
+      - "&7등에 메는 작은 상자"
+    material: CHEST
+    rarity: rare
+    price: 15000
+  ender_backpack:
+    name: "&5엔더 가방"
+    material: ENDER_CHEST
+    rarity: epic
+    price: 40000
+  barrel_backpack:
+    name: "&e나무통 가방"
+    material: BARREL
+    price: 8000
+  beehive_backpack:
+    name: "&e벌집 가방"
+    material: BEEHIVE
+    rarity: rare
+
+# ── 풍선 : 줄에 매달려 머리 위에서 흔들리는 풍선
+#   string  줄로 쓸 블록 (none 이면 줄 없음, 기본 WHITE_WOOL)
+balloons:
+  red_balloon:
+    name: "&c빨간 풍선"
+    material: RED_WOOL
+    free: true
+  slime_balloon:
+    name: "&a슬라임 풍선"
+    material: SLIME_BLOCK
+    rarity: rare
+    price: 12000
+  pumpkin_balloon:
+    name: "&6호박 풍선"
+    material: JACK_O_LANTERN
+    rarity: rare
+  rainbow_balloon:
+    name: "&#FF5555무&#FFAA00지&#FFFF55개 &#55FF55풍&#55FFFF선"
+    icon: WHITE_WOOL
+    cycle: [RED_WOOL, ORANGE_WOOL, YELLOW_WOOL, LIME_WOOL, LIGHT_BLUE_WOOL, BLUE_WOOL, PURPLE_WOOL]
+    cycle-ticks: 8
+    rarity: legendary
+
+# ── 펫 : 어깨 옆에서 둥실둥실 따라다니는 작은 친구
+#   name-tag  머리 위 이름 ({player} = 주인 이름)
+pets:
+  mini_bee:
+    name: "&e꿀벌 친구"
+    material: BEE_NEST
+    scale: 0.4
+    name-tag: "&e{player}의 꿀벌"
+    rarity: rare
+    price: 20000
+  cake_pet:
+    name: "&d케이크 펫"
+    material: CAKE
+    scale: 0.45
+    free: true
+  diamond_pet:
+    name: "&b떠다니는 다이아"
+    material: DIAMOND
+    scale: 0.6
+    name-tag: "&b반짝이"
+    rarity: epic
+  heart_pet:
+    name: "&c하트 펫"
+    material: RED_DYE
+    scale: 0.5
+    rarity: legendary
+
+# ── 파티클 : 몸 주변에 계속 나오는 효과
+#   style  AURA(몸 주변) HALO(머리 위 고리) TRAIL(걸을 때 발밑) SPIRAL(소용돌이) ORBIT(허리 궤도)
+#          WINGS(등 뒤 날개) CROWN(머리 위 왕관) TORNADO(회오리) HEART_SHAPE(등 뒤 하트)
+particles:
+  flame_halo:
+    name: "&6불꽃 후광"
+    icon: BLAZE_POWDER
+    particle: FLAME
+    style: HALO
+    price: 10000
+  angel_halo:
+    name: "&f천사의 고리"
+    icon: END_ROD
+    particle: END_ROD
+    style: HALO
+    rarity: rare
+  heart_aura:
+    name: "&d사랑의 기운"
+    icon: POPPY
+    particle: HEART
+    style: AURA
+    free: true
+  enchant_aura:
+    name: "&5마법의 기운"
+    icon: ENCHANTING_TABLE
+    particle: ENCHANT
+    style: AURA
+  soul_spiral:
+    name: "&3영혼의 소용돌이"
+    icon: SOUL_LANTERN
+    particle: SOUL_FIRE_FLAME
+    style: SPIRAL
+    rarity: rare
+  note_orbit:
+    name: "&e음표 궤도"
+    icon: NOTE_BLOCK
+    particle: NOTE
+    style: ORBIT
+  cherry_trail:
+    name: "&d벚꽃 발자국"
+    icon: CHERRY_SAPLING
+    particle: CHERRY_LEAVES
+    style: TRAIL
+  red_wings:
+    name: "&c붉은 날개"
+    icon: RED_DYE
+    particle: DUST
+    color: "#E53935"
+    size: 1.0
+    style: WINGS
+    rarity: epic
+    price: 50000
+  angel_wings:
+    name: "&f천사 날개"
+    icon: FEATHER
+    particle: DUST
+    color: "#FFFFFF"
+    size: 1.0
+    style: WINGS
+    rarity: epic
+  golden_crown:
+    name: "&6빛나는 왕관"
+    icon: GOLD_INGOT
+    particle: DUST
+    color: "#FFD700"
+    size: 0.8
+    style: CROWN
+    rarity: rare
+  cloud_tornado:
+    name: "&7회오리 바람"
+    icon: WIND_CHARGE
+    particle: CLOUD
+    style: TORNADO
+    rarity: rare
+  love_heart:
+    name: "&c커다란 하트"
+    icon: PINK_TULIP
+    particle: DUST
+    color: "#FF4D88"
+    size: 1.2
+    style: HEART_SHAPE
+    rarity: legendary
+  rainbow_spiral:
+    name: "&#FF5555무&#FFAA00지&#FFFF55개 &#55FF55소&#55FFFF용&#5555FF돌&#AA55FF이"
+    icon: PRISMARINE_CRYSTALS
+    particle: DUST
+    rainbow: true
+    size: 1.2
+    style: SPIRAL
+    rarity: legendary
+
+# ── 화살 궤적 : 쏜 화살/삼지창을 따라 나오는 효과
+#   amount  한 틱에 뿌릴 개수 (기본 1)
+arrow-trails:
+  flame_arrow:
+    name: "&6불화살"
+    icon: FIRE_CHARGE
+    particle: FLAME
+    free: true
+  heart_arrow:
+    name: "&d큐피드의 화살"
+    icon: PINK_DYE
+    particle: HEART
+    rarity: rare
+  soul_arrow:
+    name: "&3영혼 화살"
+    icon: SOUL_TORCH
+    particle: SOUL_FIRE_FLAME
+  note_arrow:
+    name: "&e음표 화살"
+    icon: JUKEBOX
+    particle: NOTE
+  rainbow_arrow:
+    name: "&#FF5555무&#FFAA00지&#FFFF55개 &#55FF55화&#55FFFF살"
+    icon: SPECTRAL_ARROW
+    particle: DUST
+    rainbow: true
+    size: 1.3
+    amount: 2
+    rarity: epic
+
+# ── 킬 이펙트 : 상대를 처치한 자리에서 터지는 효과
+#   effect  LIGHTNING(번개) FIREWORK(폭죽) BURST(파티클 폭발)
+#   FIREWORK : colors, fade-colors, firework-type(BALL, BALL_LARGE, STAR, BURST, CREEPER)
+#   BURST    : particle, amount, spread, speed
+#   sound    : 함께 재생할 소리 키 (선택), volume, pitch
+kill-effects:
+  lightning:
+    name: "&e번개"
+    icon: LIGHTNING_ROD
+    effect: LIGHTNING
+    rarity: epic
+  firework:
+    name: "&c불꽃놀이"
+    icon: FIREWORK_ROCKET
+    effect: FIREWORK
+    firework-type: BALL_LARGE
+    colors: ["#FF5252", "#FFD740"]
+    fade-colors: ["#FFFFFF"]
+    free: true
+  blood:
+    name: "&4피 튀기기"
+    icon: REDSTONE
+    effect: BURST
+    particle: BLOCK
+    block: REDSTONE_BLOCK
+    amount: 60
+    spread: 0.4
+    speed: 0.1
+  totem:
+    name: "&6불사의 토템"
+    icon: TOTEM_OF_UNDYING
+    effect: BURST
+    particle: TOTEM_OF_UNDYING
+    amount: 80
+    spread: 0.3
+    speed: 0.5
+    sound: item.totem.use
+    volume: 0.6
+    rarity: legendary
+  heart_burst:
+    name: "&d하트 폭발"
+    icon: PINK_TULIP
+    effect: BURST
+    particle: HEART
+    amount: 12
+    spread: 0.6
+    sound: entity.player.levelup
+    pitch: 1.6
+    rarity: rare
+
+# ── 킬 메시지 : 상대를 처치했을 때 사망 메시지를 바꿉니다 ({killer}, {victim})
+kill-messages:
+  classic_kill:
+    name: "&c기본 처치"
+    message: "&c{killer}&7님이 &c{victim}&7님을 쓰러뜨렸습니다!"
+    free: true
+  lesson:
+    name: "&e참교육"
+    message: "&e{killer}&7님이 &e{victim}&7님에게 &e참교육&7을 시전했습니다."
+    rarity: rare
+  sniper:
+    name: "&b명사수"
+    message: "&b{victim}&7님은 &b{killer}&7님의 &b한 방&7을 피하지 못했습니다."
+    rarity: epic
+  cookie:
+    name: "&6쿠키 반죽"
+    message: "&6{killer}&7님이 &6{victim}&7님을 &6쿠키 반죽&7으로 만들었습니다!"
+    rarity: legendary
+
+# ── 칭호 : 채팅/탭 목록 이름 앞에 붙는 글자
+#   title  실제로 붙는 글자 (name 을 생략하면 이 글자가 메뉴 이름이 됩니다)
+titles:
+  sprout:
+    title: "&a[새싹]"
+    lore:
+      - "&7처음 오신 걸 환영해요"
+    free: true
+  pro:
+    title: "&b[고수]"
+    rarity: rare
+  king:
+    title: "&6&l[왕]"
+    rarity: legendary
+  ghost:
+    title: "&7[유령]"
+  lover:
+    title: "&#FF69B4[사랑꾼]"
+    rarity: epic
+
+# ── 채팅 색 : 내가 치는 채팅 글자 색
+#   color     한 가지 색 (&b, &#55FFFF 등)
+#   gradient  색 목록 → 글자마다 이어지는 그라데이션
+#   rainbow   true 면 무지개
+#   bold / italic  굵게 / 기울임
+chat-colors:
+  aqua_chat:
+    name: "&b하늘색 채팅"
+    color: "&b"
+    free: true
+  gold_chat:
+    name: "&6황금 채팅"
+    color: "&6"
+    rarity: rare
+  sunset_chat:
+    name: "&#FF7E5F노&#FEB47B을 채팅"
+    gradient: ["#FF7E5F", "#FEB47B"]
+    rarity: epic
+  ocean_chat:
+    name: "&#2193B0바&#6DD5ED다 채팅"
+    gradient: ["#2193B0", "#6DD5ED", "#FFFFFF"]
+    rarity: epic
+  rainbow_chat:
+    name: "&#FF5555무&#FFAA00지&#FFFF55개 &#55FF55채&#55FFFF팅"
+    rainbow: true
+    bold: true
+    rarity: legendary
+
+# ── 입장 효과 : 들어오고 나갈 때의 메시지·소리·폭죽 ({player})
+#   message / quit-message  입장 / 퇴장 메시지
+#   sound, volume, pitch    모두에게 들리는 소리
+#   colors, firework-type   적으면 들어온 자리에서 폭죽이 터집니다
+join-effects:
+  simple_join:
+    name: "&a가벼운 등장"
+    message: "&a+ &f{player}"
+    quit-message: "&c- &f{player}"
+    free: true
+  royal_join:
+    name: "&6왕의 행차"
+    message: "&6&l[!] &e{player}&6님이 행차하셨습니다!"
+    sound: entity.player.levelup
+    pitch: 0.8
+    rarity: epic
+  firework_join:
+    name: "&d축제 등장"
+    message: "&d✦ &f{player}&d님이 화려하게 등장! ✦"
+    quit-message: "&7{player}님이 축제를 떠났습니다."
+    sound: entity.firework_rocket.launch
+    firework-type: STAR
+    colors: ["#FF69B4", "#00E5FF"]
+    rarity: legendary

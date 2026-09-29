@@ -1,0 +1,27 @@
+name: CosmeticsCore
+version: '${project.version}'
+main: io.github.munang77.cosmeticscore.CosmeticsCore
+api-version: '1.21'
+author: munang77
+description: 모자, 백팩, 풍선, 펫, 파티클, 화살 궤적, 킬 이펙트, 칭호, 채팅 색, 입장 효과를 제공하는 코스메틱 플러그인
+softdepend: [PlaceholderAPI, Vault]
+
+commands:
+  cosmetics:
+    description: 코스메틱 메뉴를 엽니다
+    usage: /<command> [도움말]
+    aliases: [cos, cosmetic, 코스메틱, 꾸미기]
+
+permissions:
+  cosmeticscore.use:
+    description: 코스메틱 메뉴와 착용/해제 명령어를 씁니다
+    default: true
+  cosmeticscore.cosmetic.all:
+    description: 모든 코스메틱을 쓸 수 있습니다 (개별 권한은 cosmeticscore.cosmetic.<아이디>)
+    default: op
+  cosmeticscore.admin:
+    description: 지급/회수/리로드 등 관리 명령어를 씁니다
+    default: op
+    children:
+      cosmeticscore.use: true
+      cosmeticscore.cosmetic.all: true

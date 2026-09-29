@@ -1,0 +1,161 @@
+# CosmeticsCore 문구 (&색코드, &#RRGGBB 지원)
+prefix: "&8[&dCosmetics&8] &r"
+
+categories:
+  hat: "모자"
+  backpack: "백팩"
+  balloon: "풍선"
+  pet: "펫"
+  particle: "파티클"
+  arrow_trail: "화살 궤적"
+  kill_effect: "킬 이펙트"
+  kill_message: "킬 메시지"
+  title: "칭호"
+  chat_color: "채팅 색"
+  join_effect: "입장 효과"
+
+no-permission: "&c권한이 없습니다."
+player-only: "&c게임 안에서만 쓸 수 있습니다."
+player-not-found: "&c'{player}' 플레이어를 찾을 수 없습니다."
+not-a-number: "&c'{value}' 은(는) 숫자가 아닙니다."
+unknown-cosmetic: "&c'{id}' 코스메틱이 없습니다."
+unknown-category: "&c'{category}' 카테고리가 없습니다. (/cos 도움말)"
+locked: "&c아직 잠긴 코스메틱입니다: {name}"
+equipped: "&a{name}&a 착용!"
+unequipped: "&7{category} 해제했습니다."
+unequipped-all: "&7모든 코스메틱을 해제했습니다."
+nothing-equipped: "&7착용 중인 {category}이(가) 없습니다."
+cancelled: "&c지금은 착용할 수 없습니다."
+disabled-world: "&c이 월드에서는 쓸 수 없습니다."
+helmet-blocked: "&c투구를 먼저 벗어 주세요."
+helmet-inventory-full: "&c인벤토리가 가득 차서 투구를 벗길 수 없습니다."
+helmet-moved: "&7쓰고 있던 투구는 인벤토리로 옮겼습니다."
+hat-protected: "&c모자는 /cos 메뉴에서 해제하세요."
+hat-blocks-helmet: "&c모자를 쓰고 있어 투구를 쓸 수 없습니다. /cos 메뉴에서 모자를 먼저 해제하세요."
+toggle-on: "&a이제 다른 사람의 코스메틱 효과가 보입니다."
+toggle-off: "&7이제 다른 사람의 코스메틱 효과가 보이지 않습니다."
+reloaded: "&a설정을 다시 불러왔습니다. (코스메틱 {count}개)"
+reload-failed: "&ccosmetics.yml 형식이 잘못돼 이전 목록을 그대로 씁니다. 콘솔을 확인하세요."
+given: "&a{player}님에게 {name}&a 지급했습니다."
+given-target: "&a새 코스메틱을 받았습니다: {name}"
+already-owned: "&e{player}님은 이미 {name}&e 가지고 있습니다."
+taken: "&7{player}님에게서 {name}&7 회수했습니다."
+not-owned: "&e{player}님은 {name}&e 지급받은 적이 없습니다."
+list-header: "&e── {category} ── &7({owned}/{total})"
+list-entry-owned: " &a✔ &f{id} &7- {name}"
+list-entry-equipped: " &b▶ &f{id} &7- {name} &b(착용 중)"
+list-entry-locked: " &8✖ {id} &8- {name}"
+
+# 구매 (Vault)
+already-have: "&e이미 가지고 있는 코스메틱입니다: {name}"
+not-for-sale: "&c{name}&c 은(는) 판매하지 않습니다."
+economy-missing: "&c서버에 경제 플러그인(Vault)이 없어 돈으로 살 수 없습니다."
+not-enough-money: "&c돈이 부족합니다. (가격 {price}, 가진 돈 {balance})"
+purchase-failed: "&c결제에 실패했습니다."
+purchased: "&a{name}&a 구매 완료! &7(-{price})"
+confirm-purchase: "&e{name}&e 을(를) &6{price}&e 에 살까요? 5초 안에 한 번 더 누르면 삽니다."
+
+# 미리보기
+preview-start: "&b{name}&b 미리보기 {seconds}초! &7(F5 로 내 모습을 볼 수 있어요)"
+preview-once: "&b{name}&b 미리보기!"
+preview-end: "&7미리보기가 끝났습니다."
+preview-helmet: "&c투구를 쓰고 있어 모자를 미리 볼 수 없습니다."
+preview-victim: "상대"
+preview-chat-sample: "안녕하세요! 채팅 색 미리보기입니다."
+
+# 뽑기
+crate-disabled: "&c지금은 뽑기를 할 수 없습니다."
+crate-complete: "&a뽑을 수 있는 코스메틱을 모두 가지고 있습니다!"
+crate-no-key: "&c뽑기 열쇠가 없습니다."
+crate-no-money: "&c뽑기에 필요한 돈이 부족합니다. ({price})"
+crate-title: "&d&l뽑기 결과"
+crate-won: "&d뽑기 결과: {rarity} &f{name}"
+crate-broadcast: "&6{player}&e님이 뽑기에서 {rarity} &f{name}&e 을(를) 뽑았습니다!"
+keys-own: "&e가진 뽑기 열쇠: &f{keys}개"
+keys-given: "&a{player}님에게 열쇠 {amount}개를 줬습니다."
+keys-received: "&d뽑기 열쇠 {amount}개를 받았습니다! &7(/cos 뽑기)"
+
+# 저장소 옮기기
+migrate-yaml: "&c지금 저장소가 YAML 이라 옮길 필요가 없습니다. config.yml 의 storage.type 을 바꾸고 다시 켜세요."
+migrate-start: "&eYAML 데이터를 옮기는 중..."
+migrate-done: "&a{count}명의 데이터를 옮겼습니다."
+migrate-failed: "&c옮기다가 실패했습니다: {error}"
+
+help:
+  - "&e/cos &7- 코스메틱 메뉴 열기"
+  - "&e/cos <카테고리> &7- 카테고리 바로 열기 (모자, 풍선, 펫 ...)"
+  - "&e/cos 착용 <아이디> &7- 코스메틱 착용"
+  - "&e/cos 해제 [카테고리|전체] &7- 코스메틱 해제"
+  - "&e/cos 구매 <아이디> &7- 코스메틱 사기"
+  - "&e/cos 미리보기 <아이디> &7- 잠깐 입어 보기"
+  - "&e/cos 뽑기 &7- 코스메틱 뽑기"
+  - "&e/cos 열쇠 &7- 내 뽑기 열쇠 수"
+  - "&e/cos 목록 [카테고리] &7- 코스메틱 목록"
+  - "&e/cos 보기 &7- 다른 사람 효과 보기 켜기/끄기"
+help-admin:
+  - "&c/cos 지급 <플레이어> <아이디> &7- 코스메틱 지급"
+  - "&c/cos 회수 <플레이어> <아이디> &7- 코스메틱 회수"
+  - "&c/cos 열쇠 <플레이어> <개수> &7- 뽑기 열쇠 지급 (음수면 회수)"
+  - "&c/cos 리로드 &7- 설정 다시 불러오기"
+  - "&c/cos 이전 &7- YAML 데이터를 SQLite/MySQL 로 옮기기"
+
+menu:
+  main-title: "&8코스메틱"
+  category-title: "&8{category} &7({page}/{pages})"
+  none: "&7없음"
+  profile:
+    name: "&e{player}"
+    line: "&7{category}: &f{equipped}"
+    owned: "&7모은 코스메틱: &f{owned}&7/&f{total}"
+  category-button:
+    name: "&e&l{category}"
+    lore:
+      - "&7보유: &f{owned}&7/&f{total}"
+      - "&7착용 중: &f{equipped}"
+      - ""
+      - "&e클릭해서 열기"
+  crate:
+    name: "&d&l코스메틱 뽑기"
+    title: "&8뽑기"
+    pointer: "&e▼"
+    no-price: "&7열쇠 전용"
+    lore:
+      - "&7아직 없는 코스메틱이 하나 나옵니다."
+      - "&7남은 코스메틱: &f{left}개"
+      - ""
+      - "&7열쇠: &f{keys}개"
+      - "&7열쇠가 없으면: &f{price}"
+      - ""
+      - "&e클릭해서 뽑기"
+  toggle:
+    name-on: "&a다른 사람 효과 보기: 켜짐"
+    name-off: "&7다른 사람 효과 보기: 꺼짐"
+    lore:
+      - "&7다른 플레이어의 장식, 파티클, 화살 궤적,"
+      - "&7킬 이펙트 파티클을 보이거나 숨깁니다."
+      - ""
+      - "&e클릭해서 바꾸기"
+  unequip-all:
+    name: "&c모두 해제"
+    lore:
+      - "&7착용 중인 코스메틱을 전부 해제합니다."
+  unequip-category:
+    name: "&c{category} 해제"
+  back: "&7← 뒤로"
+  previous-page: "&e← 이전 페이지"
+  next-page: "&e다음 페이지 →"
+  empty: "&7아직 등록된 {category}이(가) 없습니다."
+  item:
+    rarity: "&7등급: {rarity}"
+    price: "&7가격: &6{price}"
+    equipped:
+      - "&a✔ 착용 중"
+      - "&7좌클릭: 해제"
+    available:
+      - "&e좌클릭: 착용"
+    buy:
+      - "&6좌클릭: 구매"
+    locked:
+      - "&c✖ 잠김"
+    preview:
+      - "&b우클릭: 미리보기"
