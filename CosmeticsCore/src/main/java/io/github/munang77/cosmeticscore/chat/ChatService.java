@@ -5,8 +5,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.github.munang77.cosmeticscore.CosmeticsCore;
+import io.github.munang77.cosmeticscore.Messages;
 import io.github.munang77.cosmeticscore.cosmetic.Category;
 import io.github.munang77.cosmeticscore.cosmetic.ChatColorCosmetic;
+import io.github.munang77.cosmeticscore.cosmetic.Cosmetic;
 import io.github.munang77.cosmeticscore.cosmetic.JoinEffectCosmetic;
 import io.github.munang77.cosmeticscore.cosmetic.KillMessageCosmetic;
 import io.github.munang77.cosmeticscore.cosmetic.TitleCosmetic;
@@ -41,14 +43,23 @@ public final class ChatService implements Listener {
         return title == null ? "" : title.title();
     }
 
+    /** 이름 앞에 붙일 칭호 ("칭호§r "). 없으면 빈 문자열. */
+    public String titlePrefix(Player player) {
+        return prefixOf(title(player));
+    }
+
+    private static String prefixOf(String title) {
+        return title.isEmpty() ? "" : title + ChatColor.RESET + " ";
+    }
+
     /** 탭 목록 이름을 착용 정보에 맞춘다. */
     public void applyTab(Player player) {
-        String title = plugin.settings().titleTabList() ? title(player) : "";
-        if (title.isEmpty()) {
+        String prefix = plugin.settings().titleTabList() ? titlePrefix(player) : "";
+        if (prefix.isEmpty()) {
             resetTab(player);
             return;
         }
-        player.setPlayerListName(title + ChatColor.RESET + " " + player.getName());
+        player.setPlayerListName(prefix + player.getName());
         renamed.add(player.getUniqueId());
     }
 
@@ -56,12 +67,6 @@ public final class ChatService implements Listener {
     public void resetTab(Player player) {
         if (renamed.remove(player.getUniqueId())) {
             player.setPlayerListName(null);
-        }
-    }
-
-    public void resetAll() {
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            resetTab(player);
         }
     }
 
@@ -74,13 +79,9 @@ public final class ChatService implements Listener {
         if (color != null) {
             event.setMessage(color.apply(event.getMessage()));
         }
-        if (!plugin.settings().titleChat()) {
-            return;
-        }
-        String title = title(player);
-        if (!title.isEmpty()) {
+        if (plugin.settings().titleChat()) {
             // 형식 문자열이라 % 는 %% 로 바꿔야 한다
-            event.setFormat(title.replace("%", "%%") + ChatColor.RESET + " " + event.getFormat());
+            event.setFormat(titlePrefix(player).replace("%", "%%") + event.getFormat());
         }
     }
 
@@ -94,8 +95,9 @@ public final class ChatService implements Listener {
         if (effect == null) {
             return;
         }
-        if (effect.joinMessage() != null && event.getJoinMessage() != null) {
-            event.setJoinMessage(Text.replace(effect.joinMessage(), "player", player.getName()));
+        String message = effect.joinMessage(player.getName());
+        if (message != null && event.getJoinMessage() != null) {
+            event.setJoinMessage(message);
         }
         play(player, effect, true);
     }
@@ -105,8 +107,9 @@ public final class ChatService implements Listener {
         Player player = event.getPlayer();
         renamed.remove(player.getUniqueId());
         JoinEffectCosmetic effect = joinEffect(player);
-        if (effect != null && effect.quitMessage() != null && event.getQuitMessage() != null) {
-            event.setQuitMessage(Text.replace(effect.quitMessage(), "player", player.getName()));
+        String message = effect == null ? null : effect.quitMessage(player.getName());
+        if (message != null && event.getQuitMessage() != null) {
+            event.setQuitMessage(message);
         }
     }
 
@@ -133,15 +136,29 @@ public final class ChatService implements Listener {
         }
     }
 
-    /** 미리보기: 입장 메시지를 본인에게만 보여 주고 효과를 낸다. */
-    public void previewJoin(Player player, JoinEffectCosmetic effect) {
-        if (effect.joinMessage() != null) {
-            player.sendMessage(Text.replace(effect.joinMessage(), "player", player.getName()));
+    /**
+     * 글자로 보이는 코스메틱(칭호, 채팅 색, 킬 메시지, 입장 효과)의 미리보기. 남들에게 보이지 않게 본인에게만,
+     * 실제로 쓰일 때와 같은 방법으로 만든 글자를 보낸다.
+     */
+    public void preview(Player player, Cosmetic cosmetic) {
+        Messages msg = plugin.messages();
+        String name = player.getName();
+        String sample = Text.plain(msg.get("preview-chat-sample"));
+        if (cosmetic instanceof TitleCosmetic title) {
+            player.sendMessage(msg.get("preview-chat-format", "title", title.title(), "player", name, "message", sample));
+        } else if (cosmetic instanceof ChatColorCosmetic color) {
+            player.sendMessage(msg.get("preview-chat-format", "title", title(player), "player", name,
+                    "message", color.apply(sample)));
+        } else if (cosmetic instanceof KillMessageCosmetic kill) {
+            player.sendMessage(kill.format(name, msg.get("preview-victim")));
+        } else if (cosmetic instanceof JoinEffectCosmetic effect) {
+            for (String line : new String[] {effect.joinMessage(name), effect.quitMessage(name)}) {
+                if (line != null) {
+                    player.sendMessage(line);
+                }
+            }
+            play(player, effect, false);
         }
-        if (effect.quitMessage() != null) {
-            player.sendMessage(Text.replace(effect.quitMessage(), "player", player.getName()));
-        }
-        play(player, effect, false);
     }
 
     // ── 킬 메시지 ────────────────────────────────
@@ -156,8 +173,7 @@ public final class ChatService implements Listener {
         }
         KillMessageCosmetic message = plugin.manager().equipped(killer, Category.KILL_MESSAGE, KillMessageCosmetic.class);
         if (message != null) {
-            event.setDeathMessage(Text.replace(message.message(),
-                    "killer", killer.getName(), "victim", victim.getName()));
+            event.setDeathMessage(message.format(killer.getName(), victim.getName()));
         }
     }
 }

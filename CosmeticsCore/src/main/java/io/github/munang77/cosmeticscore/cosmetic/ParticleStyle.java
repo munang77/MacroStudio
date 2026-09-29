@@ -5,7 +5,9 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 
+import io.github.munang77.cosmeticscore.util.Facing;
 import org.bukkit.Location;
+import org.bukkit.util.Vector;
 
 /** 파티클 코스메틱이 몸 주변에 점을 찍는 모양. */
 public enum ParticleStyle {
@@ -80,22 +82,14 @@ public enum ParticleStyle {
     WINGS(4) {
         @Override
         void points(Frame f, Consumer<Location> out) {
-            double yaw = Math.toRadians(f.yaw);
-            // 바라보는 방향과 오른쪽 방향 (마인크래프트 좌표계)
-            double fx = -Math.sin(yaw);
-            double fz = Math.cos(yaw);
-            double rx = -Math.cos(yaw);
-            double rz = -Math.sin(yaw);
             double top = f.sneaking ? 1.8 : 2.1;
             double flap = 0.25 + 0.2 * Math.sin(f.step * 0.35);
             for (double[] p : WING_POINTS) {
                 double side = p[0];
                 double up = top - p[1];
                 double back = 0.3 + side * flap;
-                for (int dir = -1; dir <= 1; dir += 2) {
-                    double lateral = side * dir;
-                    out.accept(f.at(rx * lateral - fx * back, up, rz * lateral - fz * back));
-                }
+                out.accept(f.behind(-side, up, back));
+                out.accept(f.behind(side, up, back));
             }
         }
     },
@@ -136,16 +130,9 @@ public enum ParticleStyle {
     HEART_SHAPE(5) {
         @Override
         void points(Frame f, Consumer<Location> out) {
-            double yaw = Math.toRadians(f.yaw);
-            double fx = -Math.sin(yaw);
-            double fz = Math.cos(yaw);
-            double rx = -Math.cos(yaw);
-            double rz = -Math.sin(yaw);
             double center = f.sneaking ? 1.2 : 1.45;
             for (double[] p : HEART_POINTS) {
-                double lateral = p[0];
-                double up = center + p[1];
-                out.accept(f.at(rx * lateral - fx * 0.5, up, rz * lateral - fz * 0.5));
+                out.accept(f.behind(p[0], center + p[1], 0.5));
             }
         }
     };
@@ -226,6 +213,8 @@ public enum ParticleStyle {
         final int step;
         final boolean moving;
         final boolean sneaking;
+        private Vector forward;
+        private Vector right;
 
         Frame(Location base, float yaw, int step, boolean moving, boolean sneaking) {
             this.base = base;
@@ -237,6 +226,16 @@ public enum ParticleStyle {
 
         Location at(double dx, double dy, double dz) {
             return base.clone().add(dx, dy, dz);
+        }
+
+        /** 몸 기준 자리: 오른쪽으로 {@code lateral}, 위로 {@code up}, 등 뒤로 {@code back}. */
+        Location behind(double lateral, double up, double back) {
+            if (forward == null) {
+                forward = Facing.forward(yaw);
+                right = Facing.right(yaw);
+            }
+            return at(right.getX() * lateral - forward.getX() * back, up,
+                    right.getZ() * lateral - forward.getZ() * back);
         }
     }
 }

@@ -1,7 +1,7 @@
 package io.github.munang77.cosmeticscore;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -12,17 +12,13 @@ import io.github.munang77.cosmeticscore.api.CosmeticEquipEvent;
 import io.github.munang77.cosmeticscore.api.CosmeticUnequipEvent;
 import io.github.munang77.cosmeticscore.cosmetic.ArrowTrailCosmetic;
 import io.github.munang77.cosmeticscore.cosmetic.Category;
-import io.github.munang77.cosmeticscore.cosmetic.ChatColorCosmetic;
 import io.github.munang77.cosmeticscore.cosmetic.Cosmetic;
 import io.github.munang77.cosmeticscore.cosmetic.CosmeticRegistry;
-import io.github.munang77.cosmeticscore.cosmetic.JoinEffectCosmetic;
 import io.github.munang77.cosmeticscore.cosmetic.KillEffectCosmetic;
-import io.github.munang77.cosmeticscore.cosmetic.KillMessageCosmetic;
-import io.github.munang77.cosmeticscore.cosmetic.TitleCosmetic;
 import io.github.munang77.cosmeticscore.data.PlayerData;
 import io.github.munang77.cosmeticscore.hat.HatService;
 import io.github.munang77.cosmeticscore.hook.EconomyHook;
-import io.github.munang77.cosmeticscore.util.Text;
+import io.github.munang77.cosmeticscore.util.Facing;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -47,6 +43,8 @@ public final class CosmeticManager {
     private volatile long clock;
     /** 잠긴 코스메틱을 마지막으로 미리 본 시각 ({@link #clock} 기준). */
     private final Map<UUID, Long> lastPreview = new ConcurrentHashMap<>();
+    /** {@link #viewers} 가 돌려 쓰는 위치 객체. */
+    private final Location scratch = new Location(null, 0, 0, 0);
 
     CosmeticManager(CosmeticsCore plugin) {
         this.plugin = plugin;
@@ -66,7 +64,7 @@ public final class CosmeticManager {
         return data != null && data.hasUnlocked(cosmetic.id());
     }
 
-    public int ownedCount(Player player, List<Cosmetic> cosmetics) {
+    public int ownedCount(Player player, Collection<Cosmetic> cosmetics) {
         int owned = 0;
         for (Cosmetic c : cosmetics) {
             if (owns(player, c)) {
@@ -91,9 +89,11 @@ public final class CosmeticManager {
             }
         }
         PlayerData data = plugin.store().get(player.getUniqueId());
-        if (data == null) {
-            return null;
-        }
+        return data == null ? null : stored(data, category);
+    }
+
+    /** 저장된 착용 아이디의 코스메틱. 설정에서 지워졌거나 다른 카테고리로 바뀌었으면 {@code null}. */
+    private Cosmetic stored(PlayerData data, Category category) {
         Cosmetic cosmetic = plugin.registry().get(data.equipped(category));
         return cosmetic != null && cosmetic.category() == category ? cosmetic : null;
     }
@@ -126,7 +126,7 @@ public final class CosmeticManager {
             msg.send(player, "locked", "name", cosmetic.name());
             return false;
         }
-        if (plugin.settings().isDisabled(player.getWorld()) && worldBound(cosmetic.category())) {
+        if (plugin.settings().isDisabled(player.getWorld()) && cosmetic.category().isWorldBound()) {
             msg.send(player, "disabled-world");
             return false;
         }
@@ -144,30 +144,18 @@ public final class CosmeticManager {
         boolean helmetMoved = false;
         if (cosmetic.category() == Category.HAT) {
             HatService.Room room = plugin.hats().makeRoom(player);
-            switch (room) {
-                case BLOCKED -> {
-                    msg.send(player, "helmet-blocked");
-                    return false;
-                }
-                case INVENTORY_FULL -> {
-                    msg.send(player, "helmet-inventory-full");
-                    return false;
-                }
-                case CURSED -> {
-                    msg.send(player, "helmet-cursed");
-                    return false;
-                }
-                case MOVED -> helmetMoved = true;
-                case FREE -> {
-                }
+            if (room.failure() != null) {
+                msg.send(player, room.failure());
+                return false;
             }
+            helmetMoved = room == HatService.Room.MOVED;
         }
 
         // 미리보기 말고 실제로 입고 있던 것
-        Cosmetic previous = plugin.registry().get(data.equipped(cosmetic.category()));
+        Cosmetic previous = stored(data, cosmetic.category());
         endPreview(player, cosmetic.category());
         data.setEquipped(cosmetic.category(), cosmetic.id());
-        if (previous != null && previous.category() == cosmetic.category()) {
+        if (previous != null) {
             Bukkit.getPluginManager().callEvent(new CosmeticUnequipEvent(player, previous));
         }
         applyVisuals(player, cosmetic.category());
@@ -179,12 +167,6 @@ public final class CosmeticManager {
         return true;
     }
 
-    /** 꺼진 월드에서 못 쓰는 카테고리인지 (말로만 보이는 칭호/채팅 색/메시지는 어디서나 된다). */
-    private static boolean worldBound(Category category) {
-        return category.isDisplay() || category == Category.HAT || category == Category.PARTICLE
-                || category == Category.ARROW_TRAIL || category == Category.KILL_EFFECT;
-    }
-
     /**
      * 한 카테고리를 해제한다.
      *
@@ -194,30 +176,45 @@ public final class CosmeticManager {
     public boolean unequip(Player player, Category category, boolean notify) {
         PlayerData data = plugin.store().get(player.getUniqueId());
         Messages msg = plugin.messages();
-        String id = data == null ? null : data.equipped(category);
-        if (id == null) {
+        if (data == null || !clear(player, data, category)) {
             if (notify) {
                 msg.send(player, "nothing-equipped", "category", msg.category(category));
             }
             return false;
         }
-        Cosmetic previous = plugin.registry().get(id);
-        data.setEquipped(category, null);
         applyVisuals(player, category);
         plugin.store().save(data);
-        Bukkit.getPluginManager().callEvent(new CosmeticUnequipEvent(player,
-                previous != null && previous.category() == category ? previous : null));
         if (notify) {
             msg.send(player, "unequipped", "category", msg.category(category));
         }
         return true;
     }
 
+    /** 모두 해제한다. 저장과 모습 맞추기는 한 번만 한다. */
     public void unequipAll(Player player) {
-        for (Category category : Category.values()) {
-            unequip(player, category, false);
+        PlayerData data = plugin.store().get(player.getUniqueId());
+        if (data != null) {
+            boolean changed = false;
+            for (Category category : Category.values()) {
+                changed |= clear(player, data, category);
+            }
+            if (changed) {
+                applyVisuals(player);
+                plugin.store().save(data);
+            }
         }
         plugin.messages().send(player, "unequipped-all");
+    }
+
+    /** 착용 칸을 비우고 해제 이벤트를 낸다. @return 비울 게 있었으면 {@code true} */
+    private boolean clear(Player player, PlayerData data, Category category) {
+        if (data.equipped(category) == null) {
+            return false;
+        }
+        Cosmetic previous = stored(data, category);
+        data.setEquipped(category, null);
+        Bukkit.getPluginManager().callEvent(new CosmeticUnequipEvent(player, previous));
+        return true;
     }
 
     /**
@@ -255,21 +252,45 @@ public final class CosmeticManager {
      */
     public boolean handleJoin(Player player) {
         if (plugin.store().activate(player.getUniqueId(), player.getName()) != null) {
-            finishJoin(player);
+            resync(player);
             return true;
         }
         plugin.store().loadAsync(player.getUniqueId(), player.getName()).thenAccept(data ->
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     if (player.isOnline()) {
-                        finishJoin(player);
+                        resync(player);
                     }
                 }));
         return false;
     }
 
-    private void finishJoin(Player player) {
+    /** 착용 정보를 다시 확인하고(권한·설정 변경) 모습을 맞춘다. 접속, 리로드, 회수 뒤에 부른다. */
+    public void resync(Player player) {
         validate(player);
         applyVisuals(player);
+    }
+
+    /**
+     * "다른 사람 효과 보기"를 뒤집는다.
+     *
+     * @return 데이터가 아직 없으면 {@code false}
+     */
+    public boolean toggleShowOthers(Player player) {
+        PlayerData data = plugin.store().get(player.getUniqueId());
+        if (data == null) {
+            return false;
+        }
+        data.setShowOthers(!data.showOthers());
+        plugin.store().save(data);
+        plugin.displays().syncVisibility();
+        plugin.messages().send(player, data.showOthers() ? "toggle-on" : "toggle-off");
+        return true;
+    }
+
+    /** 뽑기 열쇠 수. */
+    public int keys(Player player) {
+        PlayerData data = plugin.store().get(player.getUniqueId());
+        return data == null ? 0 : data.keys();
     }
 
     /** 나갈 때. */
@@ -350,7 +371,7 @@ public final class CosmeticManager {
             msg.send(player, "preview-disabled");
             return;
         }
-        if (settings.isDisabled(player.getWorld()) && worldBound(category)) {
+        if (settings.isDisabled(player.getWorld()) && category.isWorldBound()) {
             msg.send(player, "disabled-world");
             return;
         }
@@ -358,14 +379,14 @@ public final class CosmeticManager {
             msg.send(player, "preview-helmet");
             return;
         }
-        Long last = lastPreview.get(player.getUniqueId());
-        long cooldown = settings.previewCooldownSeconds() * 20L;
-        if (last != null && clock - last < cooldown && !owns(player, cosmetic)) {
-            long left = (cooldown - (clock - last) + 19) / 20;
-            msg.send(player, "preview-cooldown", "seconds", String.valueOf(Math.max(1, left)));
-            return;
-        }
         if (!owns(player, cosmetic)) {
+            Long last = lastPreview.get(player.getUniqueId());
+            long cooldown = settings.previewCooldownSeconds() * 20L;
+            if (last != null && clock - last < cooldown) {
+                long left = (cooldown - (clock - last) + 19) / 20;
+                msg.send(player, "preview-cooldown", "seconds", String.valueOf(Math.max(1, left)));
+                return;
+            }
             lastPreview.put(player.getUniqueId(), clock);
         }
 
@@ -377,23 +398,14 @@ public final class CosmeticManager {
             msg.send(player, "preview-start", "name", cosmetic.name(), "seconds", String.valueOf(seconds));
             return;
         }
-        Location base = player.getLocation();
-        double yaw = Math.toRadians(base.getYaw());
-        Location front = base.clone().add(-Math.sin(yaw) * 3, 0, Math.cos(yaw) * 3);
-        String sample = Text.plain(msg.get("preview-chat-sample"));
-        switch (category) {
-            case ARROW_TRAIL -> plugin.effects().previewTrail(player, (ArrowTrailCosmetic) cosmetic);
-            case KILL_EFFECT -> plugin.effects().play(player, (KillEffectCosmetic) cosmetic, front);
-            case KILL_MESSAGE -> player.sendMessage(Text.replace(((KillMessageCosmetic) cosmetic).message(),
-                    "killer", player.getName(), "victim", msg.get("preview-victim")));
-            case JOIN_EFFECT -> plugin.chat().previewJoin(player, (JoinEffectCosmetic) cosmetic);
-            case TITLE -> player.sendMessage(msg.get("preview-chat-format",
-                    "title", ((TitleCosmetic) cosmetic).title(), "player", player.getName(), "message", sample));
-            case CHAT_COLOR -> player.sendMessage(msg.get("preview-chat-format",
-                    "title", plugin.chat().title(player), "player", player.getName(),
-                    "message", ((ChatColorCosmetic) cosmetic).apply(sample)));
-            default -> {
-            }
+        if (cosmetic instanceof ArrowTrailCosmetic trail) {
+            plugin.effects().previewTrail(player, trail);
+        } else if (cosmetic instanceof KillEffectCosmetic effect) {
+            Location base = player.getLocation();
+            plugin.effects().play(player, effect, base.add(Facing.forward(base.getYaw()).multiply(3)));
+        } else {
+            // 칭호, 채팅 색, 킬 메시지, 입장 효과: 글자는 실제로 쓰는 쪽에서 똑같이 만든다
+            plugin.chat().preview(player, cosmetic);
         }
         msg.send(player, "preview-once", "name", cosmetic.name());
     }
@@ -430,9 +442,6 @@ public final class CosmeticManager {
         previews.values().removeIf(Map::isEmpty);
         long cooldown = plugin.settings().previewCooldownSeconds() * 20L;
         lastPreview.values().removeIf(at -> now - at >= cooldown);
-        if (now % 1200 == 0) {
-            plugin.store().sweepStaleLogins();
-        }
     }
 
     /** 모든 미리보기를 끝낸다 (플러그인 종료). */
@@ -481,7 +490,8 @@ public final class CosmeticManager {
         double rangeSq = range * range;
         List<Player> out = new ArrayList<>();
         for (Player viewer : world.getPlayers()) {
-            if (viewer.getLocation().distanceSquared(at) > rangeSq) {
+            // 매 틱 불리므로 위치 객체를 새로 만들지 않고 하나를 돌려 쓴다 (메인 스레드 전용)
+            if (viewer.getLocation(scratch).distanceSquared(at) > rangeSq) {
                 continue;
             }
             if (viewer.equals(source)) {
@@ -492,18 +502,6 @@ public final class CosmeticManager {
                 continue;
             }
             out.add(viewer);
-        }
-        return out;
-    }
-
-    /** 카테고리별 착용 이름 (메뉴/플레이스홀더용). */
-    public Map<Category, Cosmetic> equippedAll(Player player) {
-        Map<Category, Cosmetic> out = new EnumMap<>(Category.class);
-        for (Category c : Category.values()) {
-            Cosmetic cosmetic = equipped(player, c);
-            if (cosmetic != null) {
-                out.put(c, cosmetic);
-            }
         }
         return out;
     }

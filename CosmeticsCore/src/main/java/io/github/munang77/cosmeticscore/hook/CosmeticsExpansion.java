@@ -1,13 +1,11 @@
 package io.github.munang77.cosmeticscore.hook;
 
-import java.util.ArrayList;
 import java.util.Locale;
 
 import io.github.munang77.cosmeticscore.CosmeticsCore;
 import io.github.munang77.cosmeticscore.cosmetic.Category;
 import io.github.munang77.cosmeticscore.cosmetic.Cosmetic;
-import io.github.munang77.cosmeticscore.data.PlayerData;
-import io.github.munang77.cosmeticscore.util.Text;
+import io.github.munang77.cosmeticscore.cosmetic.TitleCosmetic;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
@@ -65,18 +63,16 @@ public final class CosmeticsExpansion extends PlaceholderExpansion {
         switch (p) {
             case "title":
                 return plugin.chat().title(player);
-            case "title_space": {
-                String title = plugin.chat().title(player);
-                return title.isEmpty() ? "" : title + "§r ";
+            case "title_space":
+                return plugin.chat().titlePrefix(player);
+            case "title_plain": {
+                TitleCosmetic title = plugin.manager().equipped(player, Category.TITLE, TitleCosmetic.class);
+                return title == null ? "" : title.plainTitle();
             }
-            case "title_plain":
-                return Text.plain(plugin.chat().title(player));
             case "owned":
-                return String.valueOf(plugin.manager().ownedCount(player, new ArrayList<>(plugin.registry().all())));
-            case "keys": {
-                PlayerData data = plugin.store().get(player.getUniqueId());
-                return String.valueOf(data == null ? 0 : data.keys());
-            }
+                return String.valueOf(plugin.manager().ownedCount(player, plugin.registry().all()));
+            case "keys":
+                return String.valueOf(plugin.manager().keys(player));
             default:
                 break;
         }

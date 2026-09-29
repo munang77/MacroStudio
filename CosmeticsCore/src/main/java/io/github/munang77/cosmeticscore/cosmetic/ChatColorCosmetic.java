@@ -1,11 +1,10 @@
 package io.github.munang77.cosmeticscore.cosmetic;
 
 import io.github.munang77.cosmeticscore.util.Colors;
+import io.github.munang77.cosmeticscore.util.Text;
 
 /** 채팅 글자 색: 한 가지 색, 그라데이션, 무지개. */
 public final class ChatColorCosmetic extends Cosmetic {
-
-    private static final char SECTION = '§';
 
     /** 한 가지 색 코드 (예: "§b§l"). 그라데이션이면 {@code null}. */
     private final String prefix;
@@ -45,19 +44,11 @@ public final class ChatColorCosmetic extends Cosmetic {
                 continue;
             }
             double t = visible <= 1 ? 0 : index / (double) (visible - 1);
-            appendHex(sb, Colors.lerp(stops, t));
+            Text.appendHex(sb, Colors.lerp(stops, t));
             sb.append(format);
             sb.appendCodePoint(cp);
             index++;
         }
         return sb.toString();
-    }
-
-    private static void appendHex(StringBuilder sb, int rgb) {
-        String hex = String.format("%06x", rgb & 0xFFFFFF);
-        sb.append(SECTION).append('x');
-        for (int i = 0; i < 6; i++) {
-            sb.append(SECTION).append(hex.charAt(i));
-        }
     }
 }

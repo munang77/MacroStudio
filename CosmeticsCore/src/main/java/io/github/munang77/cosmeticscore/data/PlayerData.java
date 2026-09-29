@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -112,9 +113,8 @@ public final class PlayerData {
     }
 
     /** 열쇠 수를 더한다 (음수면 뺀다). 0 아래로는 내려가지 않는다. */
-    public synchronized int addKeys(int amount) {
+    public synchronized void addKeys(int amount) {
         keys = (int) Math.max(0, Math.min(Integer.MAX_VALUE, (long) keys + amount));
-        return keys;
     }
 
     /** @return 열쇠가 있어서 하나 썼으면 {@code true} */
@@ -169,14 +169,14 @@ public final class PlayerData {
         data.showOthers = yaml.getBoolean("show-others", true);
         data.keys = Math.max(0, yaml.getInt("keys", 0));
         for (String id : yaml.getStringList("unlocked")) {
-            data.unlocked.add(id.toLowerCase(java.util.Locale.ROOT));
+            data.unlocked.add(id.toLowerCase(Locale.ROOT));
         }
         ConfigurationSection eq = yaml.getConfigurationSection("equipped");
         if (eq != null) {
             for (Category c : Category.values()) {
                 String id = eq.getString(c.key());
                 if (id != null && !id.isBlank()) {
-                    data.equipped.put(c, id.toLowerCase(java.util.Locale.ROOT));
+                    data.equipped.put(c, id.toLowerCase(Locale.ROOT));
                 }
             }
         }

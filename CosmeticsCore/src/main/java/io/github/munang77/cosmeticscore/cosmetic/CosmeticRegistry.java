@@ -1,6 +1,7 @@
 package io.github.munang77.cosmeticscore.cosmetic;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -10,9 +11,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import io.github.munang77.cosmeticscore.cosmetic.Cosmetic.Info;
 import io.github.munang77.cosmeticscore.util.Colors;
+import io.github.munang77.cosmeticscore.util.Materials;
 import io.github.munang77.cosmeticscore.util.Text;
 import org.bukkit.Color;
 import org.bukkit.FireworkEffect;
@@ -102,14 +105,15 @@ public final class CosmeticRegistry {
     private static Cosmetic parse(Category category, String id, ConfigurationSection s) {
         return switch (category) {
             case HAT -> {
-                ItemSpec item = ItemSpec.parse(s, ItemSpec.Keys.ITEM, null);
+                ItemSpec item = ItemSpec.parse(s, ItemSpec.Keys.ITEM);
                 if (item == null) {
                     throw new IllegalArgumentException("material 또는 texture 항목이 없습니다");
                 }
                 yield new HatCosmetic(info(id, s, category, item, id), item);
             }
             case BACKPACK, BALLOON, PET -> parseDisplay(category, id, s);
-            case PARTICLE -> new ParticleCosmetic(info(id, s, category, null, id), ParticleSpec.parse(s), style(s));
+            case PARTICLE -> new ParticleCosmetic(info(id, s, category, null, id), ParticleSpec.parse(s),
+                    enumValue(ParticleStyle.class, s, "style", "AURA"));
             case ARROW_TRAIL -> new ArrowTrailCosmetic(info(id, s, category, null, id), ParticleSpec.parse(s),
                     clamp(s.getInt("amount", 1), 1, 10));
             case KILL_EFFECT -> parseKillEffect(id, s);
@@ -125,11 +129,11 @@ public final class CosmeticRegistry {
     }
 
     private static DisplayCosmetic parseDisplay(Category category, String id, ConfigurationSection s) {
-        ItemSpec item = ItemSpec.parse(s, ItemSpec.Keys.ITEM, null);
+        ItemSpec item = ItemSpec.parse(s, ItemSpec.Keys.ITEM);
         List<ItemSpec> cycle = new ArrayList<>();
         for (String name : s.getStringList("cycle")) {
-            Material m = Material.matchMaterial(name.trim());
-            if (m == null || m.isAir() || !m.isItem()) {
+            Material m = Materials.item(name);
+            if (m == null) {
                 throw new IllegalArgumentException("cycle 에 쓸 수 없는 아이템입니다: " + name);
             }
             cycle.add(ItemSpec.of(m));
@@ -146,42 +150,36 @@ public final class CosmeticRegistry {
             default -> 0.5f;
         };
         float scale = (float) Math.max(0.05, Math.min(4.0, s.getDouble("scale", defaultScale)));
-        String nameTag = s.getString("name-tag");
+        // 이름표는 펫에만, 줄은 풍선에만 있다
+        String nameTag = category == Category.PET ? s.getString("name-tag") : null;
         nameTag = nameTag == null || nameTag.isBlank() ? null : Text.color(nameTag);
-        String string = null;
+        Material string = null;
         if (category == Category.BALLOON) {
-            string = s.getString("string", "WHITE_WOOL");
-            if (string.isBlank() || string.equalsIgnoreCase("none")) {
-                string = null;
-            } else {
-                Material m = Material.matchMaterial(string.trim());
-                if (m == null || !m.isBlock()) {
-                    throw new IllegalArgumentException("string 에 쓸 수 없는 블록입니다: " + string);
+            String raw = s.getString("string", "WHITE_WOOL");
+            if (!raw.isBlank() && !raw.equalsIgnoreCase("none")) {
+                string = Materials.block(raw);
+                if (string == null) {
+                    throw new IllegalArgumentException("string 에 쓸 수 없는 블록입니다: " + raw);
                 }
-                string = m.name();
             }
         }
         return new DisplayCosmetic(info(id, s, category, item, id), category, item, cycle,
                 clamp(s.getInt("cycle-ticks", 10), 1, 1200), scale, s.getDouble("offset-y", 0), nameTag, string);
     }
 
-    private static ParticleStyle style(ConfigurationSection s) {
-        String styleName = s.getString("style", "AURA");
+    /** 대소문자와 앞뒤 공백을 무시하고 enum 값을 읽는다. 없으면 쓸 수 있는 값을 모두 알려 준다. */
+    private static <E extends Enum<E>> E enumValue(Class<E> type, ConfigurationSection s, String key, String def) {
+        String raw = s.getString(key, def);
         try {
-            return ParticleStyle.valueOf(styleName.trim().toUpperCase(Locale.ROOT));
+            return Enum.valueOf(type, raw.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("없는 style 입니다: " + styleName + " (" + names(ParticleStyle.values()) + ")");
+            String names = Arrays.stream(type.getEnumConstants()).map(Enum::name).collect(Collectors.joining(", "));
+            throw new IllegalArgumentException("없는 " + key + " 입니다: " + raw + " (" + names + ")");
         }
     }
 
     private static KillEffectCosmetic parseKillEffect(String id, ConfigurationSection s) {
-        String effectName = s.getString("effect", "BURST");
-        KillEffectCosmetic.Effect effect;
-        try {
-            effect = KillEffectCosmetic.Effect.valueOf(effectName.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("없는 effect 입니다: " + effectName + " (LIGHTNING, FIREWORK, BURST)");
-        }
+        KillEffectCosmetic.Effect effect = enumValue(KillEffectCosmetic.Effect.class, s, "effect", "BURST");
         FireworkEffect firework = effect == KillEffectCosmetic.Effect.FIREWORK ? firework(s) : null;
         ParticleSpec burst = effect == KillEffectCosmetic.Effect.BURST ? ParticleSpec.parse(s) : null;
         return new KillEffectCosmetic(info(id, s, Category.KILL_EFFECT, null, id), effect, firework, burst,
@@ -228,7 +226,7 @@ public final class CosmeticRegistry {
 
     private static Info info(String id, ConfigurationSection s, Category category, ItemSpec fallbackIcon,
                              String defaultName) {
-        ItemSpec icon = ItemSpec.parse(s, ItemSpec.Keys.ICON, null);
+        ItemSpec icon = ItemSpec.parse(s, ItemSpec.Keys.ICON);
         if (icon == null) {
             icon = fallbackIcon != null ? fallbackIcon : ItemSpec.of(category.defaultIcon());
         }
@@ -259,26 +257,8 @@ public final class CosmeticRegistry {
         return Math.max(min, Math.min(max, value));
     }
 
-    private static String names(Enum<?>[] values) {
-        StringBuilder sb = new StringBuilder();
-        for (Enum<?> v : values) {
-            if (sb.length() > 0) {
-                sb.append(", ");
-            }
-            sb.append(v.name());
-        }
-        return sb.toString();
-    }
-
     private static FireworkEffect firework(ConfigurationSection s) {
-        String typeName = s.getString("firework-type", "BALL_LARGE");
-        FireworkEffect.Type type;
-        try {
-            type = FireworkEffect.Type.valueOf(typeName.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("없는 firework-type 입니다: " + typeName
-                    + " (BALL, BALL_LARGE, STAR, BURST, CREEPER)");
-        }
+        FireworkEffect.Type type = enumValue(FireworkEffect.Type.class, s, "firework-type", "BALL_LARGE");
         List<Color> colors = colors(s.getStringList("colors"));
         if (colors.isEmpty()) {
             colors = List.of(Color.RED, Color.YELLOW);

@@ -117,7 +117,7 @@ public final class CosmeticsCommand implements TabExecutor {
             case EQUIP -> withCosmetic(sender, args, (player, c) -> plugin.manager().equip(player, c));
             case UNEQUIP -> unequip(sender, args);
             case LIST -> list(sender, args);
-            case TOGGLE -> toggle(sender);
+            case TOGGLE -> ifPlayer(sender, plugin.manager()::toggleShowOthers);
             case BUY -> withCosmetic(sender, args, (player, c) -> plugin.manager().purchase(player, c));
             case PREVIEW -> withCosmetic(sender, args, (player, c) -> plugin.manager().preview(player, c));
             case CRATE -> ifPlayer(sender, player -> CrateMenu.openCrate(plugin, player));
@@ -216,27 +216,12 @@ public final class CosmeticsCommand implements TabExecutor {
         });
     }
 
-    private void toggle(CommandSender sender) {
-        ifPlayer(sender, player -> {
-            PlayerData data = plugin.store().get(player.getUniqueId());
-            if (data == null) {
-                return;
-            }
-            data.setShowOthers(!data.showOthers());
-            plugin.store().save(data);
-            plugin.displays().syncVisibility();
-            plugin.messages().send(player, data.showOthers() ? "toggle-on" : "toggle-off");
-        });
-    }
-
     /** {@code /cos 열쇠} 는 내 열쇠 수, {@code /cos 열쇠 <플레이어> <개수>} 는 지급(음수면 회수, 관리자). */
     private void keys(CommandSender sender, String[] args) {
         Messages msg = plugin.messages();
         if (args.length < 3) {
-            ifPlayer(sender, player -> {
-                PlayerData data = plugin.store().get(player.getUniqueId());
-                msg.send(player, "keys-own", "keys", String.valueOf(data == null ? 0 : data.keys()));
-            });
+            ifPlayer(sender, player ->
+                    msg.send(player, "keys-own", "keys", String.valueOf(plugin.manager().keys(player))));
             return;
         }
         if (!sender.hasPermission(ADMIN)) {
@@ -312,6 +297,9 @@ public final class CosmeticsCommand implements TabExecutor {
             }
             // 이 서버에는 처음이지만 같은 저장소(MySQL)를 쓰는 다른 서버에 들어온 적이 있으면 된다
             plugin.store().exists(uuid).whenComplete((exists, error) -> {
+                if (error != null) {
+                    plugin.getLogger().warning(name + " 을(를) 찾다가 저장소 오류가 났습니다: " + error.getMessage());
+                }
                 if (Boolean.TRUE.equals(exists)) {
                     apply(sender, uuid, name, targetName, edit, done, revalidate);
                 } else {
@@ -332,8 +320,7 @@ public final class CosmeticsCommand implements TabExecutor {
                     }
                     Player now = Bukkit.getPlayer(uuid);
                     if (now != null && changed && revalidate) {
-                        plugin.manager().validate(now);
-                        plugin.manager().applyVisuals(now);
+                        plugin.manager().resync(now);
                     }
                     done.accept(name, changed);
                 }));
@@ -369,9 +356,7 @@ public final class CosmeticsCommand implements TabExecutor {
                     options.add(sub.names[0]);
                 }
             }
-            for (Category category : Category.values()) {
-                options.add(plugin.messages().category(category).replace(" ", ""));
-            }
+            options.addAll(categoryWords(false));
             return filter(options, args[0]);
         }
         Sub sub = Sub.find(args[0]);
@@ -388,10 +373,7 @@ public final class CosmeticsCommand implements TabExecutor {
                     if (sub == Sub.UNEQUIP) {
                         options.addAll(ALL_WORDS);
                     }
-                    for (Category category : Category.values()) {
-                        options.add(plugin.messages().category(category).replace(" ", ""));
-                        options.add(category.key());
-                    }
+                    options.addAll(categoryWords(true));
                     yield filter(options, args[1]);
                 }
                 case GIVE, TAKE -> filter(onlineNames(), args[1]);
@@ -406,6 +388,18 @@ public final class CosmeticsCommand implements TabExecutor {
             return filter(List.of("1", "5", "10", "-1"), args[2]);
         }
         return List.of();
+    }
+
+    /** 카테고리 한글 이름 (띄어쓰기 없이), 필요하면 영문 키도. */
+    private List<String> categoryWords(boolean withKeys) {
+        List<String> words = new ArrayList<>();
+        for (Category category : Category.values()) {
+            words.add(plugin.messages().category(category).replace(" ", ""));
+            if (withKeys) {
+                words.add(category.key());
+            }
+        }
+        return words;
     }
 
     private List<String> allIds() {

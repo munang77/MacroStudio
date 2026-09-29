@@ -12,6 +12,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import io.github.munang77.cosmeticscore.util.ItemBuilder;
+import io.github.munang77.cosmeticscore.util.Materials;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -55,6 +56,7 @@ public final class ItemSpec {
     private final Integer modelData;
     private final NamespacedKey itemModel;
     private final String textureUrl;
+    private ItemStack base;
 
     public ItemSpec(Material material, Integer modelData, NamespacedKey itemModel, String textureUrl) {
         this.material = material;
@@ -68,25 +70,22 @@ public final class ItemSpec {
     }
 
     /**
-     * 아이템 설정을 읽는다. 아이템 이름이 없으면 {@code fallback} 을 쓰고, 그것도 없으면 오류다.
-     * 텍스처만 적으면 아이템은 자동으로 플레이어 머리가 된다.
+     * 아이템 설정을 읽는다. 텍스처만 적으면 아이템은 자동으로 플레이어 머리가 된다.
      *
-     * @return {@code fallback} 이 {@code null} 이고 아무것도 적혀 있지 않으면 {@code null}
+     * @return 아무것도 적혀 있지 않으면 {@code null}
      */
-    public static ItemSpec parse(ConfigurationSection s, Keys keys, Material fallback) {
+    public static ItemSpec parse(ConfigurationSection s, Keys keys) {
         String texture = s.getString(keys.texture);
         String textureUrl = texture == null || texture.isBlank() ? null : textureUrl(texture.trim());
         String name = s.getString(keys.material);
         Material material;
         if (name != null && !name.isBlank()) {
-            material = Material.matchMaterial(name.trim());
-            if (material == null || material.isAir() || !material.isItem()) {
+            material = Materials.item(name);
+            if (material == null) {
                 throw new IllegalArgumentException(keys.material + " 에 쓸 수 없는 아이템입니다: " + name);
             }
         } else if (textureUrl != null) {
             material = Material.PLAYER_HEAD;
-        } else if (fallback != null) {
-            material = fallback;
         } else {
             return null;
         }
@@ -152,29 +151,29 @@ public final class ItemSpec {
         return material;
     }
 
-    public Integer modelData() {
-        return modelData;
-    }
-
-    public NamespacedKey itemModel() {
-        return itemModel;
-    }
-
-    public String textureUrl() {
-        return textureUrl;
-    }
-
     /** 이 모양대로 빌더를 시작한다. 이름/설명은 호출한 쪽에서 붙인다. */
     public ItemBuilder builder(Logger log) {
-        ItemBuilder builder = new ItemBuilder(material).modelData(modelData).itemModel(itemModel, log);
-        if (textureUrl != null && builder.meta() instanceof SkullMeta skull) {
-            applyTexture(skull, log);
-        }
-        return builder;
+        return new ItemBuilder(base(log).clone());
     }
 
+    /** 이 모양의 아이템 (새 복사본). */
     public ItemStack create(Logger log) {
-        return builder(log).build();
+        return base(log).clone();
+    }
+
+    /**
+     * 모델·텍스처까지 입힌 기본 아이템. 매 틱 바뀌는 풍선이나 메뉴 아이콘이 매번 머리 프로필을 새로 만들지 않도록
+     * 한 번만 만들어 둔다 (메인 스레드에서만 쓴다).
+     */
+    private ItemStack base(Logger log) {
+        if (base == null) {
+            ItemBuilder builder = new ItemBuilder(material).modelData(modelData).itemModel(itemModel, log);
+            if (textureUrl != null && builder.meta() instanceof SkullMeta skull) {
+                applyTexture(skull, log);
+            }
+            base = builder.build();
+        }
+        return base;
     }
 
     @SuppressWarnings("deprecation")

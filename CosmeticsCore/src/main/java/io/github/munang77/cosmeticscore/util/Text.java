@@ -24,14 +24,20 @@ public final class Text {
         Matcher m = HEX.matcher(text);
         StringBuilder sb = new StringBuilder(text.length() + 16);
         while (m.find()) {
-            StringBuilder hex = new StringBuilder(14).append(SECTION).append('x');
-            for (char c : m.group(1).toCharArray()) {
-                hex.append(SECTION).append(Character.toLowerCase(c));
-            }
+            StringBuilder hex = new StringBuilder(14);
+            appendHex(hex, Integer.parseInt(m.group(1), 16));
             m.appendReplacement(sb, Matcher.quoteReplacement(hex.toString()));
         }
         m.appendTail(sb);
         return ChatColor.translateAlternateColorCodes('&', sb.toString());
+    }
+
+    /** 0xRRGGBB 색을 마인크래프트 헥스 색코드({@code §x§r§r§g§g§b§b})로 붙인다. */
+    public static void appendHex(StringBuilder sb, int rgb) {
+        sb.append(SECTION).append('x');
+        for (int shift = 20; shift >= 0; shift -= 4) {
+            sb.append(SECTION).append(Character.forDigit((rgb >> shift) & 0xF, 16));
+        }
     }
 
     public static List<String> color(List<String> lines) {

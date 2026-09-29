@@ -8,7 +8,9 @@ import java.util.List;
 
 import io.github.munang77.cosmeticscore.cosmetic.Category;
 import io.github.munang77.cosmeticscore.util.Text;
+import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 /** messages.yml. 파일에 없는 문구는 플러그인에 들어 있는 기본 문구를 쓴다. */
@@ -22,8 +24,7 @@ public final class Messages {
         if (defaults != null) {
             yaml.setDefaults(YamlConfiguration.loadConfiguration(new InputStreamReader(defaults, StandardCharsets.UTF_8)));
         }
-        String rawPrefix = yaml.getString("prefix");
-        this.prefix = Text.color(rawPrefix == null ? "" : rawPrefix);
+        this.prefix = Text.color(yaml.getString("prefix"));
     }
 
     /**
@@ -44,6 +45,13 @@ public final class Messages {
         String text = get(path, pairs);
         if (!text.isEmpty()) {
             to.sendMessage(prefix + text);
+        }
+    }
+
+    /** 접속한 모든 플레이어에게 머리말을 붙여 보낸다. */
+    public void broadcast(String path, String... pairs) {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            send(player, path, pairs);
         }
     }
 

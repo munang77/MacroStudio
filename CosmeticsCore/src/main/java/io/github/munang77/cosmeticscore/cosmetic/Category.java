@@ -33,6 +33,11 @@ public enum Category {
         return this == HAT || isDisplay() || this == PARTICLE;
     }
 
+    /** 코스메틱이 꺼진 월드에서 쓸 수 없는 카테고리 (글자로만 보이는 칭호/채팅 색/메시지는 어디서나 된다). */
+    public boolean isWorldBound() {
+        return isTimedPreview() || this == ARROW_TRAIL || this == KILL_EFFECT;
+    }
+
     private final String key;
     private final String section;
     private final Material defaultIcon;

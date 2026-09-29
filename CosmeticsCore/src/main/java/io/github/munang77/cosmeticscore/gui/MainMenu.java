@@ -9,7 +9,6 @@ import io.github.munang77.cosmeticscore.Messages;
 import io.github.munang77.cosmeticscore.Settings;
 import io.github.munang77.cosmeticscore.cosmetic.Category;
 import io.github.munang77.cosmeticscore.cosmetic.Cosmetic;
-import io.github.munang77.cosmeticscore.data.PlayerData;
 import io.github.munang77.cosmeticscore.util.ItemBuilder;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -50,21 +49,21 @@ public final class MainMenu extends Menu {
             inventory.setItem(settings.categorySlot(category), button);
         }
 
-        PlayerData data = plugin.store().get(viewer.getUniqueId());
         if (settings.crateEnabled()) {
             double price = settings.cratePrice();
+            int keys = manager.keys(viewer);
             inventory.setItem(Settings.CRATE_SLOT, new ItemBuilder(Material.ENDER_CHEST)
                     .name(msg.get("menu.crate.name"))
                     .lore(msg.list("menu.crate.lore",
-                            "keys", String.valueOf(data == null ? 0 : data.keys()),
+                            "keys", String.valueOf(keys),
                             "price", price > 0 ? plugin.economy().format(price) : msg.get("menu.crate.no-price"),
                             "left", String.valueOf(plugin.crates().candidates(viewer).size())))
-                    .glow(data != null && data.keys() > 0)
+                    .glow(keys > 0)
                     .hideTooltipExtras()
                     .build());
         }
 
-        boolean showOthers = data == null || data.showOthers();
+        boolean showOthers = manager.seesOthers(viewer);
         inventory.setItem(Settings.TOGGLE_SLOT, new ItemBuilder(showOthers ? Material.ENDER_EYE : Material.ENDER_PEARL)
                 .name(msg.get(showOthers ? "menu.toggle.name-on" : "menu.toggle.name-off"))
                 .lore(msg.list("menu.toggle.lore"))
@@ -86,7 +85,7 @@ public final class MainMenu extends Menu {
                     "category", msg.category(category),
                     "equipped", equipped == null ? msg.get("menu.none") : equipped.name()));
         }
-        int owned = plugin.manager().ownedCount(viewer, new ArrayList<>(plugin.registry().all()));
+        int owned = plugin.manager().ownedCount(viewer, plugin.registry().all());
         lore.add("");
         lore.add(msg.get("menu.profile.owned", "owned", String.valueOf(owned),
                 "total", String.valueOf(plugin.registry().all().size())));
@@ -112,16 +111,10 @@ public final class MainMenu extends Menu {
         if (slot == Settings.CRATE_SLOT && settings.crateEnabled()) {
             CrateMenu.openCrate(plugin, viewer);
         } else if (slot == Settings.TOGGLE_SLOT) {
-            PlayerData data = plugin.store().get(viewer.getUniqueId());
-            if (data == null) {
-                return;
+            if (plugin.manager().toggleShowOthers(viewer)) {
+                sound("ui.button.click", 1.0f);
+                render();
             }
-            data.setShowOthers(!data.showOthers());
-            plugin.store().save(data);
-            plugin.displays().syncVisibility();
-            plugin.messages().send(viewer, data.showOthers() ? "toggle-on" : "toggle-off");
-            sound("ui.button.click", 1.0f);
-            render();
         } else if (slot == Settings.UNEQUIP_ALL_SLOT) {
             plugin.manager().unequipAll(viewer);
             sound("entity.item.pickup", 0.8f);

@@ -22,5 +22,10 @@ public interface Storage {
     /** 로그에 보일 이름. */
     String describe();
 
+    /** 서버 여러 대가 같이 쓸 수 있는 저장소(MySQL)인지. */
+    default boolean shared() {
+        return false;
+    }
+
     void close();
 }

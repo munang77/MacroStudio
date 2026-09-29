@@ -6,7 +6,9 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 
 /** 메뉴 안에서는 아이템을 못 옮기게 하고, 누른 칸을 메뉴에 넘긴다. */
@@ -15,7 +17,8 @@ public final class MenuListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onClick(InventoryClickEvent event) {
         Inventory top = event.getInventory();
-        if (!(top.getHolder() instanceof Menu menu)) {
+        Menu menu = Menu.of(event.getWhoClicked(), top);
+        if (menu == null) {
             return;
         }
         event.setCancelled(true);
@@ -30,8 +33,18 @@ public final class MenuListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onDrag(InventoryDragEvent event) {
-        if (event.getInventory().getHolder() instanceof Menu) {
+        if (Menu.of(event.getWhoClicked(), event.getInventory()) != null) {
             event.setCancelled(true);
         }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onClose(InventoryCloseEvent event) {
+        Menu.closed(event.getPlayer(), event.getInventory());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onQuit(PlayerQuitEvent event) {
+        Menu.forget(event.getPlayer());
     }
 }

@@ -21,10 +21,6 @@ public final class YamlStorage implements Storage {
         this.log = log;
     }
 
-    public Path dir() {
-        return dir;
-    }
-
     private Path file(UUID uuid) {
         return dir.resolve(uuid + ".yml");
     }

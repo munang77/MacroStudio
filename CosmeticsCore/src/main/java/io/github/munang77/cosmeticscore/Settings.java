@@ -11,6 +11,7 @@ import java.util.logging.Logger;
 
 import io.github.munang77.cosmeticscore.cosmetic.Category;
 import io.github.munang77.cosmeticscore.cosmetic.CosmeticRegistry;
+import io.github.munang77.cosmeticscore.util.Materials;
 import io.github.munang77.cosmeticscore.util.Text;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -131,10 +132,9 @@ public final class Settings {
         if (name == null || name.isBlank()) {
             return null;
         }
-        Material m = Material.matchMaterial(name.trim());
-        if (m == null || m.isAir() || !m.isItem()) {
+        Material m = Materials.item(name);
+        if (m == null) {
             log.warning("[config.yml] " + path + ": 쓸 수 없는 아이템입니다: " + name);
-            return null;
         }
         return m;
     }
@@ -217,10 +217,6 @@ public final class Settings {
 
     public boolean hasRarity(String key) {
         return rarities.containsKey(key);
-    }
-
-    public Map<String, Rarity> rarities() {
-        return rarities;
     }
 
     public boolean showLocked() {

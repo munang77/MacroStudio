@@ -84,6 +84,7 @@ public final class DataStore {
         }
         try {
             io.submit(() -> {
+                dropStaleLogins();
                 Entry entry = known.get(uuid);
                 if (entry != null) {
                     // 같은 계정이 아직 접속해 있다 (중복 접속) → 같은 데이터를 이어서 쓴다
@@ -172,12 +173,16 @@ public final class DataStore {
         });
     }
 
-    /** 오래도록 접속으로 이어지지 않은 로그인(연결이 끊긴 경우)의 데이터를 버린다. */
-    public void sweepStaleLogins() {
-        io.execute(() -> {
-            long now = System.currentTimeMillis();
-            known.values().removeIf(e -> !e.active && now - e.created > STALE_LOGIN_MS);
-        });
+    /** 오래도록 접속으로 이어지지 않은 로그인(연결이 끊긴 경우)의 데이터를 버린다. 로그인 때마다 입출력 스레드에서. */
+    private void dropStaleLogins() {
+        long now = System.currentTimeMillis();
+        known.values().removeIf(e -> !e.active && now - e.created > STALE_LOGIN_MS);
+    }
+
+    /** 메모리에 올라와 있으면 그 데이터, 아니면 저장소에서 읽은 데이터 (입출력 스레드에서만). 메모리 쪽이 항상 이긴다. */
+    private PlayerData current(UUID uuid) {
+        Entry entry = known.get(uuid);
+        return entry != null ? entry.data : read(uuid);
     }
 
     // ── 관리자 수정 ──────────────────────────────
@@ -190,8 +195,7 @@ public final class DataStore {
      */
     public CompletableFuture<Boolean> edit(UUID uuid, Predicate<PlayerData> edit) {
         return CompletableFuture.supplyAsync(() -> {
-            Entry entry = known.get(uuid);
-            PlayerData data = entry != null ? entry.data : read(uuid);
+            PlayerData data = current(uuid);
             if (data.readOnly()) {
                 throw new IllegalStateException("데이터를 읽을 수 없습니다: " + uuid);
             }
@@ -203,16 +207,16 @@ public final class DataStore {
         }, io);
     }
 
-    /** 이 플레이어의 데이터가 있는지 (서버 여러 대가 같은 저장소를 쓸 때 다른 서버에서 들어온 적이 있는지). */
+    /**
+     * 이 플레이어의 데이터가 있는지 (서버 여러 대가 같은 저장소를 쓸 때 다른 서버에서 들어온 적이 있는지).
+     * 저장소 오류는 그대로 실패로 돌려주므로 부르는 쪽에서 기록한다.
+     */
     public CompletableFuture<Boolean> exists(UUID uuid) {
         return CompletableFuture.supplyAsync(() -> {
-            if (known.containsKey(uuid)) {
-                return true;
-            }
             try {
-                return storage.read(uuid) != null;
+                return known.containsKey(uuid) || storage.read(uuid) != null;
             } catch (Exception e) {
-                return false;
+                throw new IllegalStateException("저장소를 읽지 못했습니다: " + e.getMessage(), e);
             }
         }, io);
     }
@@ -239,8 +243,7 @@ public final class DataStore {
                         continue;
                     }
                     PlayerData imported = PlayerData.deserialize(uuid, Files.readString(file, StandardCharsets.UTF_8));
-                    Entry entry = known.get(uuid);
-                    PlayerData target = entry != null ? entry.data : read(uuid);
+                    PlayerData target = current(uuid);
                     if (target.readOnly()) {
                         continue;
                     }
@@ -266,14 +269,10 @@ public final class DataStore {
 
     /** 서버가 꺼질 때: 접속 중인 데이터를 모두 저장하고 쓰기가 끝날 때까지 기다린다. */
     public void shutdown() {
-        List<PlayerData> active = new ArrayList<>();
         for (Entry entry : known.values()) {
             if (entry.active) {
-                active.add(entry.data);
+                save(entry.data);
             }
-        }
-        for (PlayerData data : active) {
-            save(data);
         }
         io.execute(() -> {
             known.clear();

@@ -9,11 +9,9 @@ import io.github.munang77.cosmeticscore.Messages;
 import io.github.munang77.cosmeticscore.cosmetic.Cosmetic;
 import io.github.munang77.cosmeticscore.crate.CrateService;
 import io.github.munang77.cosmeticscore.util.ItemBuilder;
-import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitRunnable;
 
 /** 뽑기 연출: 가운데 칸에서 후보가 빠르게 돌다가 점점 느려지며 당첨 코스메틱에 멈춘다. 보상은 이미 지급된 상태다. */
@@ -41,12 +39,7 @@ public final class CrateMenu extends Menu {
         switch (result.outcome()) {
             case OK -> {
                 CrateMenu menu = new CrateMenu(plugin, player, result.reward(), result.pool());
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    if (player.isOnline()) {
-                        menu.open();
-                        menu.spin();
-                    }
-                });
+                menu.openNextTick(menu::spin);
             }
             case DISABLED -> msg.send(player, "crate-disabled");
             case COMPLETE -> msg.send(player, "crate-complete");
@@ -60,20 +53,15 @@ public final class CrateMenu extends Menu {
     @Override
     protected void render() {
         inventory.clear();
-        ItemStack frame = new ItemBuilder(Material.PURPLE_STAINED_GLASS_PANE).name(" ").hideTooltipExtras().build();
-        for (int i = 0; i < SIZE; i++) {
-            inventory.setItem(i, frame);
-        }
         inventory.setItem(4, new ItemBuilder(Material.HOPPER).name(plugin.messages().get("menu.crate.pointer")).build());
         show(pool.get(ThreadLocalRandom.current().nextInt(pool.size())), false);
+        fill(Material.PURPLE_STAINED_GLASS_PANE);
     }
 
     private void show(Cosmetic cosmetic, boolean won) {
-        List<String> lore = new ArrayList<>();
-        lore.add(plugin.messages().get("menu.item.rarity", "rarity", plugin.settings().rarity(cosmetic.rarity()).name()));
         inventory.setItem(CENTER, cosmetic.icon().builder(plugin.getLogger())
                 .name(cosmetic.name())
-                .lore(lore)
+                .lore(List.of(rarityLine(cosmetic)))
                 .glow(won)
                 .hideTooltipExtras()
                 .build());

@@ -1,21 +1,26 @@
 package io.github.munang77.cosmeticscore.display;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import io.github.munang77.cosmeticscore.CosmeticManager;
 import io.github.munang77.cosmeticscore.CosmeticsCore;
 import io.github.munang77.cosmeticscore.cosmetic.Category;
 import io.github.munang77.cosmeticscore.cosmetic.DisplayCosmetic;
-import io.github.munang77.cosmeticscore.cosmetic.ItemSpec;
+import io.github.munang77.cosmeticscore.util.Facing;
+import io.github.munang77.cosmeticscore.util.Text;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.entity.BlockDisplay;
@@ -43,12 +48,15 @@ import org.joml.Vector3f;
  */
 public final class DisplayService implements Listener {
 
-    private static final Category[] PARTS = {Category.BACKPACK, Category.BALLOON, Category.PET};
+    private static final Category[] PARTS = Arrays.stream(Category.values())
+            .filter(Category::isDisplay).toArray(Category[]::new);
     private static final int RESPAWN_COOLDOWN_TICKS = 100;
 
     private final CosmeticsCore plugin;
     private final NamespacedKey key;
     private final Map<UUID, Rig> rigs = new HashMap<>();
+    /** 이 서비스가 소환한 엔티티. 정리할 때 월드 전체가 아니라 이것만 본다. */
+    private final Set<Entity> spawned = new HashSet<>();
     private BukkitTask task;
     private long tick;
 
@@ -72,9 +80,10 @@ public final class DisplayService implements Listener {
             rig.removeAll();
         }
         rigs.clear();
+        spawned.clear();
     }
 
-    /** 서버가 갑자기 꺼져서 남은 장식이 있으면 지운다 (저장되지 않게 만들지만 혹시 몰라서). */
+    /** 서버가 갑자기 꺼져서 남은 장식이 있으면 지운다 (저장되지 않게 만들지만 혹시 몰라서). 켤 때 한 번만. */
     private void removeLeftovers() {
         for (World world : Bukkit.getWorlds()) {
             for (Display display : world.getEntitiesByClass(Display.class)) {
@@ -90,17 +99,13 @@ public final class DisplayService implements Listener {
         update(player);
     }
 
-    /** 이 플러그인이 만든 장식 엔티티인지. */
-    public boolean isCosmeticEntity(Entity entity) {
-        return entity instanceof Display && entity.getPersistentDataContainer().has(key, PersistentDataType.BYTE);
-    }
-
     /** 보기 설정이 바뀌었을 때 모든 장식의 보이기를 다시 맞춘다. */
     public void syncVisibility() {
+        Viewers viewers = new Viewers(plugin.manager());
         for (Map.Entry<UUID, Rig> entry : rigs.entrySet()) {
             Player owner = Bukkit.getPlayer(entry.getKey());
             if (owner != null) {
-                sync(owner, entry.getValue());
+                sync(owner, entry.getValue(), viewers);
             }
         }
     }
@@ -125,6 +130,7 @@ public final class DisplayService implements Listener {
         for (Player player : Bukkit.getOnlinePlayers()) {
             update(player);
         }
+        Viewers viewers = tick % 20 == 0 ? new Viewers(plugin.manager()) : null;
         Iterator<Map.Entry<UUID, Rig>> it = rigs.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<UUID, Rig> entry = it.next();
@@ -132,8 +138,8 @@ public final class DisplayService implements Listener {
             if (owner == null) {
                 entry.getValue().removeAll();
                 it.remove();
-            } else if (tick % 20 == 0) {
-                sync(owner, entry.getValue());
+            } else if (viewers != null) {
+                sync(owner, entry.getValue(), viewers);
             }
         }
         if (tick % 100 == 0) {
@@ -141,33 +147,45 @@ public final class DisplayService implements Listener {
         }
     }
 
-    /** 어느 장식에도 속하지 않은 이 플러그인의 엔티티를 지운다 (소환 도중 오류 등으로 남은 것). */
+    /** 소환한 엔티티 중 어느 장식에도 속하지 않게 된 것(소환 도중 오류 등)을 지운다. */
     private void sweep() {
-        Set<UUID> tracked = new HashSet<>();
+        Set<Entity> tracked = new HashSet<>();
         for (Rig rig : rigs.values()) {
             for (Part part : rig.parts.values()) {
-                for (Entity e : part.entities()) {
-                    tracked.add(e.getUniqueId());
-                }
+                tracked.addAll(part.entities());
             }
         }
-        for (World world : Bukkit.getWorlds()) {
-            for (Display display : world.getEntitiesByClass(Display.class)) {
-                if (!tracked.contains(display.getUniqueId())
-                        && display.getPersistentDataContainer().has(key, PersistentDataType.BYTE)) {
-                    display.remove();
-                }
+        spawned.removeIf(e -> {
+            if (!e.isValid()) {
+                return true;
             }
-        }
+            if (!tracked.contains(e)) {
+                e.remove();
+                return true;
+            }
+            return false;
+        });
     }
 
     private void update(Player player) {
         UUID id = player.getUniqueId();
         Rig rig = rigs.get(id);
         CosmeticManager manager = plugin.manager();
-        boolean hidden = manager.isHidden(player);
-        for (Category category : PARTS) {
-            DisplayCosmetic want = hidden ? null : manager.equipped(player, category, DisplayCosmetic.class);
+        DisplayCosmetic[] wanted = new DisplayCosmetic[PARTS.length];
+        boolean any = false;
+        for (int i = 0; i < PARTS.length; i++) {
+            wanted[i] = manager.equipped(player, PARTS[i], DisplayCosmetic.class);
+            any |= wanted[i] != null;
+        }
+        if (!any && rig == null) {
+            return;
+        }
+        if (any && manager.isHidden(player)) {
+            Arrays.fill(wanted, null);
+        }
+        for (int i = 0; i < PARTS.length; i++) {
+            Category category = PARTS[i];
+            DisplayCosmetic want = wanted[i];
             Part part = rig == null ? null : rig.parts.get(category);
             if (want == null) {
                 if (part != null) {
@@ -191,20 +209,20 @@ public final class DisplayService implements Listener {
             if (blocked != null && tick < blocked) {
                 continue;
             }
-            Part spawned = spawn(player, rig, category, want);
-            if (spawned == null) {
+            Part created = spawn(player, rig, want);
+            if (created == null) {
                 rig.blockedUntil.put(category, tick + RESPAWN_COOLDOWN_TICKS);
                 continue;
             }
             rig.blockedUntil.remove(category);
-            rig.parts.put(category, spawned);
+            rig.parts.put(category, created);
             for (UUID viewerId : rig.hiddenFrom) {
                 Player viewer = Bukkit.getPlayer(viewerId);
                 if (viewer != null) {
-                    spawned.hideFrom(plugin, viewer);
+                    created.hideFrom(plugin, viewer);
                 }
             }
-            sync(player, rig);
+            sync(player, rig, new Viewers(manager));
         }
         if (rig == null) {
             return;
@@ -213,17 +231,17 @@ public final class DisplayService implements Listener {
             rigs.remove(id);
             return;
         }
-        rig.updateBody(player);
+        Pose pose = rig.pose(player, tick);
         for (Part part : rig.parts.values()) {
-            place(player, rig, part, false);
+            place(pose, part, false);
         }
     }
 
     // ── 만들기 ───────────────────────────────────
 
-    private Part spawn(Player player, Rig rig, Category category, DisplayCosmetic cosmetic) {
+    private Part spawn(Player player, Rig rig, DisplayCosmetic cosmetic) {
         World world = player.getWorld();
-        Part part = new Part(category, cosmetic);
+        Part part = new Part(cosmetic);
         part.world = world;
         Location start = player.getLocation();
         float scale = cosmetic.scale();
@@ -235,25 +253,26 @@ public final class DisplayService implements Listener {
                 d.setTransformation(new Transformation(new Vector3f(), new Quaternionf(),
                         new Vector3f(scale, scale, scale), new Quaternionf()));
             });
-            if (category == Category.BALLOON && cosmetic.stringBlock() != null) {
-                Material block = Material.matchMaterial(cosmetic.stringBlock());
-                if (block != null && block.isBlock()) {
-                    part.string = world.spawn(start, BlockDisplay.class, d -> {
-                        prepare(d);
-                        d.setBlock(block.createBlockData());
-                    });
-                }
+            spawned.add(part.main);
+            if (cosmetic.stringBlock() != null) {
+                part.string = world.spawn(start, BlockDisplay.class, d -> {
+                    prepare(d);
+                    d.setBlock(cosmetic.stringBlock().createBlockData());
+                });
+                spawned.add(part.string);
             }
-            if (category == Category.PET && cosmetic.nameTag() != null) {
-                String text = cosmetic.nameTag().replace("{player}", player.getName());
+            if (cosmetic.nameTag() != null) {
+                String text = Text.replace(cosmetic.nameTag(), "player", player.getName());
                 part.tag = world.spawn(start, TextDisplay.class, d -> {
                     prepare(d);
                     d.setText(text);
                     d.setBillboard(Display.Billboard.CENTER);
                 });
+                spawned.add(part.tag);
             }
         } catch (RuntimeException e) {
-            plugin.getLogger().warning(player.getName() + " 의 " + category.key() + " 장식을 만들지 못했습니다: " + e);
+            plugin.getLogger().warning(player.getName() + " 의 " + cosmetic.category().key()
+                    + " 장식을 만들지 못했습니다: " + e);
             part.remove();
             return null;
         }
@@ -262,8 +281,7 @@ public final class DisplayService implements Listener {
             part.remove();
             return null;
         }
-        part.shown = cosmetic.itemAt(tick);
-        place(player, rig, part, true);
+        place(rig.pose(player, tick), part, true);
         return part;
     }
 
@@ -277,33 +295,33 @@ public final class DisplayService implements Listener {
 
     // ── 위치 ─────────────────────────────────────
 
-    private void place(Player player, Rig rig, Part part, boolean snap) {
-        Location base = player.getLocation();
-        double yaw = Math.toRadians(rig.bodyYaw);
-        Vector forward = new Vector(-Math.sin(yaw), 0, Math.cos(yaw));
-        Vector right = new Vector(-Math.cos(yaw), 0, -Math.sin(yaw));
-        boolean sneaking = player.isSneaking();
+    /** 이번 틱의 주인 모습 (장식마다 다시 계산하지 않도록 한 번만 구한다). */
+    private record Pose(Vector feet, float bodyYaw, Vector forward, Vector right, boolean sneaking) {
+    }
+
+    private void place(Pose pose, Part part, boolean snap) {
         DisplayCosmetic c = part.cosmetic;
-        Vector feet = base.toVector();
-
         if (c.cycles() && tick % c.cycleTicks() == 0) {
-            part.shown = c.itemAt(tick);
-            part.main.setItemStack(part.shown.create(plugin.getLogger()));
+            part.main.setItemStack(c.itemAt(tick).create(plugin.getLogger()));
         }
+        Vector feet = pose.feet();
+        Vector forward = pose.forward();
+        Vector right = pose.right();
+        boolean sneaking = pose.sneaking();
 
-        switch (part.category) {
+        switch (c.category()) {
             case BACKPACK -> {
                 Vector at = feet.clone()
                         .add(forward.clone().multiply(sneaking ? -0.38 : -0.28))
                         .add(new Vector(0, (sneaking ? 0.85 : 1.1) + c.offsetY(), 0));
-                move(part.main, at, rig.bodyYaw);
+                move(part.main, at, pose.bodyYaw());
             }
             case BALLOON -> {
                 double bob = Math.sin(tick * 0.08) * 0.12;
                 Vector target = feet.clone().add(right.clone().multiply(0.9)).add(forward.clone().multiply(-0.5))
                         .add(new Vector(0, 2.5 + c.offsetY() + bob, 0));
                 part.pos = follow(part.pos, target, 0.18, snap);
-                move(part.main, part.pos, rig.bodyYaw);
+                move(part.main, part.pos, pose.bodyYaw());
                 if (part.string != null) {
                     Vector anchor = feet.clone().add(right.clone().multiply(0.35)).add(forward.clone().multiply(0.15))
                             .add(new Vector(0, sneaking ? 0.8 : 1.0, 0));
@@ -316,7 +334,7 @@ public final class DisplayService implements Listener {
                 Vector target = feet.clone().add(right.clone().multiply(-0.85)).add(forward.clone().multiply(-0.35))
                         .add(new Vector(0, (sneaking ? 0.95 : 1.2) + c.offsetY() + bob, 0));
                 part.pos = follow(part.pos, target, 0.2, snap);
-                move(part.main, part.pos, rig.bodyYaw);
+                move(part.main, part.pos, pose.bodyYaw());
                 if (part.tag != null) {
                     move(part.tag, part.pos.clone().add(new Vector(0, 0.35 * c.scale() + 0.3, 0)), 0);
                 }
@@ -355,16 +373,29 @@ public final class DisplayService implements Listener {
 
     // ── 보이기 ───────────────────────────────────
 
+    /** 한 번 확인할 때 쓰는 접속자 목록과 각자의 "다른 사람 효과 보기" 설정 (장식마다 다시 읽지 않는다). */
+    private static final class Viewers {
+        final List<Player> players = new ArrayList<>(Bukkit.getOnlinePlayers());
+        final boolean[] seesOthers = new boolean[players.size()];
+        final Set<UUID> online = new HashSet<>();
+
+        Viewers(CosmeticManager manager) {
+            for (int i = 0; i < players.size(); i++) {
+                seesOthers[i] = manager.seesOthers(players.get(i));
+                online.add(players.get(i).getUniqueId());
+            }
+        }
+    }
+
     /** 다른 사람 효과를 끈 플레이어와 주인을 볼 수 없는 플레이어에게는 숨긴다. */
-    private void sync(Player owner, Rig rig) {
-        Set<UUID> online = new HashSet<>();
-        for (Player viewer : Bukkit.getOnlinePlayers()) {
-            UUID vid = viewer.getUniqueId();
-            online.add(vid);
+    private void sync(Player owner, Rig rig, Viewers viewers) {
+        for (int i = 0; i < viewers.players.size(); i++) {
+            Player viewer = viewers.players.get(i);
             if (viewer.equals(owner)) {
                 continue;
             }
-            boolean should = plugin.manager().seesOthers(viewer) && viewer.canSee(owner);
+            UUID vid = viewer.getUniqueId();
+            boolean should = viewers.seesOthers[i] && viewer.canSee(owner);
             if (!should && rig.hiddenFrom.add(vid)) {
                 for (Part part : rig.parts.values()) {
                     part.hideFrom(plugin, viewer);
@@ -375,7 +406,7 @@ public final class DisplayService implements Listener {
                 }
             }
         }
-        rig.hiddenFrom.retainAll(online);
+        rig.hiddenFrom.retainAll(viewers.online);
     }
 
     // ── 자료 ─────────────────────────────────────
@@ -384,39 +415,40 @@ public final class DisplayService implements Listener {
     private static final class Rig {
         final Map<Category, Part> parts = new EnumMap<>(Category.class);
         final Set<UUID> hiddenFrom = new HashSet<>();
-        float bodyYaw;
-        Vector lastFeet;
         /** 소환이 막혔던 카테고리는 잠시 다시 시도하지 않는다 (다른 카테고리는 영향 없음). */
         final Map<Category, Long> blockedUntil = new EnumMap<>(Category.class);
+        float bodyYaw;
+        Vector lastFeet;
+        long poseTick = -1;
+        Pose pose;
 
         Rig(Location at) {
             this.bodyYaw = at.getYaw();
             this.lastFeet = at.toVector();
         }
 
-        /** 몸통 방향: 머리보다 느리게 따라가고, 50도 넘게 벌어지지 않는다 (걸을 때는 빨리 따라간다). */
-        void updateBody(Player player) {
+        /**
+         * 이번 틱의 모습. 몸통 방향은 머리보다 느리게 따라가고, 50도 넘게 벌어지지 않는다 (걸을 때는 빨리 따라간다).
+         * 같은 틱에 여러 번 불려도 한 번만 계산한다.
+         */
+        Pose pose(Player player, long now) {
+            if (pose != null && poseTick == now) {
+                return pose;
+            }
             Location loc = player.getLocation();
             Vector feet = loc.toVector();
-            boolean moving = lastFeet != null && feet.distanceSquared(lastFeet) > 0.0009;
+            boolean moving = feet.distanceSquared(lastFeet) > 0.0009;
             lastFeet = feet;
             float head = loc.getYaw();
-            float diff = wrap(head - bodyYaw);
+            float diff = Location.normalizeYaw(head - bodyYaw);
             if (Math.abs(diff) > 50) {
-                bodyYaw = wrap(head - Math.signum(diff) * 50);
+                bodyYaw = Location.normalizeYaw(head - Math.signum(diff) * 50);
             } else {
-                bodyYaw = wrap(bodyYaw + diff * (moving ? 0.35f : 0.08f));
+                bodyYaw = Location.normalizeYaw(bodyYaw + diff * (moving ? 0.35f : 0.08f));
             }
-        }
-
-        static float wrap(float degrees) {
-            float d = degrees % 360f;
-            if (d >= 180f) {
-                d -= 360f;
-            } else if (d < -180f) {
-                d += 360f;
-            }
-            return d;
+            poseTick = now;
+            pose = new Pose(feet, bodyYaw, Facing.forward(bodyYaw), Facing.right(bodyYaw), player.isSneaking());
+            return pose;
         }
 
         void removeAll() {
@@ -429,17 +461,14 @@ public final class DisplayService implements Listener {
 
     /** 장식 하나 (본체 + 풍선 줄 / 펫 이름표). */
     private static final class Part {
-        final Category category;
         final DisplayCosmetic cosmetic;
         World world;
         ItemDisplay main;
         BlockDisplay string;
         TextDisplay tag;
         Vector pos;
-        ItemSpec shown;
 
-        Part(Category category, DisplayCosmetic cosmetic) {
-            this.category = category;
+        Part(DisplayCosmetic cosmetic) {
             this.cosmetic = cosmetic;
         }
 
@@ -460,20 +489,8 @@ public final class DisplayService implements Listener {
             }
         }
 
-        Entity[] entities() {
-            int n = (main != null ? 1 : 0) + (string != null ? 1 : 0) + (tag != null ? 1 : 0);
-            Entity[] out = new Entity[n];
-            int i = 0;
-            if (main != null) {
-                out[i++] = main;
-            }
-            if (string != null) {
-                out[i++] = string;
-            }
-            if (tag != null) {
-                out[i] = tag;
-            }
-            return out;
+        List<Entity> entities() {
+            return Stream.of(main, string, tag).filter(Objects::nonNull).map(Entity.class::cast).toList();
         }
 
         void remove() {

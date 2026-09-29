@@ -1,12 +1,16 @@
 package io.github.munang77.cosmeticscore.hat;
 
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.github.munang77.cosmeticscore.CosmeticsCore;
 import io.github.munang77.cosmeticscore.cosmetic.Category;
 import io.github.munang77.cosmeticscore.cosmetic.HatCosmetic;
+import io.github.munang77.cosmeticscore.util.ItemBuilder;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -41,40 +45,68 @@ import org.bukkit.scheduler.BukkitTask;
  */
 public final class HatService implements Listener {
 
-    /** {@link #makeRoom} 결과. */
+    /** {@link #makeRoom} 결과. 실패하면 플레이어에게 보낼 문구 키가 있다. */
     public enum Room {
         /** 머리 칸이 비어 있거나 이미 모자다. */
-        FREE,
+        FREE(null),
         /** 쓰고 있던 투구를 인벤토리로 옮겼다. */
-        MOVED,
+        MOVED(null),
         /** 투구를 쓰고 있고, 옮기지 않도록 설정돼 있다. */
-        BLOCKED,
+        BLOCKED("helmet-blocked"),
         /** 투구를 옮길 빈칸이 없다. */
-        INVENTORY_FULL,
+        INVENTORY_FULL("helmet-inventory-full"),
         /** 귀속 저주가 걸린 투구라 벗길 수 없다. */
-        CURSED
+        CURSED("helmet-cursed");
+
+        private final String failure;
+
+        Room(String failure) {
+            this.failure = failure;
+        }
+
+        /** 모자를 씌울 수 없을 때 보낼 messages.yml 키. 씌울 수 있으면 {@code null}. */
+        public String failure() {
+            return failure;
+        }
     }
 
     private static final long WARN_COOLDOWN_MS = 3000;
+    /** 모든 플레이어를 이 틱 수 동안 나눠서 한 번씩 확인한다. */
+    private static final int CHECK_PERIOD = 100;
 
     private final CosmeticsCore plugin;
     private final NamespacedKey key;
     private final Map<UUID, Long> lastWarning = new ConcurrentHashMap<>();
+    /** 코스메틱마다 한 번만 만든 모자 아이템. 설정을 다시 불러오면 비운다. */
+    private final Map<HatCosmetic, ItemStack> built = new IdentityHashMap<>();
+    /** 다음 틱에 확인하기로 한 플레이어 (같은 틱에 여러 번 요청돼도 한 번만). */
+    private final Set<UUID> pending = new HashSet<>();
     private BukkitTask task;
+    private int tick;
 
     public HatService(CosmeticsCore plugin) {
         this.plugin = plugin;
         this.key = new NamespacedKey(plugin, "hat");
     }
 
-    /** 5초마다 모자가 사라지지 않았는지 (/clear 등) 확인한다. */
+    /**
+     * 모자가 사라지지 않았는지 (/clear 등) 5초에 한 번씩 확인한다. 한 틱에 몰리지 않게 플레이어를 100틱에 나눈다.
+     */
     public void start() {
         stop();
         task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            int slot = tick++ % CHECK_PERIOD;
             for (Player p : Bukkit.getOnlinePlayers()) {
-                refresh(p);
+                if (Math.floorMod(p.getUniqueId().hashCode(), CHECK_PERIOD) == slot) {
+                    refresh(p);
+                }
             }
-        }, 100L, 100L);
+        }, 1L, 1L);
+    }
+
+    /** 설정을 다시 불러왔을 때: 만들어 둔 모자 아이템을 버린다. */
+    public void clearCache() {
+        built.clear();
     }
 
     public void stop() {
@@ -92,31 +124,38 @@ public final class HatService implements Listener {
         return meta != null && meta.getPersistentDataContainer().has(key, PersistentDataType.STRING);
     }
 
-    /** 방어력 없고, 부서지지 않고, 표시가 붙은 모자 아이템. */
+    /** 방어력 없고, 부서지지 않고, 표시가 붙은 모자 아이템 (새 복사본). */
     public ItemStack create(HatCosmetic hat) {
-        ItemStack item = hat.item().builder(plugin.getLogger())
-                .name(hat.name())
-                .lore(hat.lore())
-                .unbreakable()
-                .hideTooltipExtras()
-                .build();
-        ItemMeta meta = item.getItemMeta();
-        meta.getPersistentDataContainer().set(key, PersistentDataType.STRING, hat.id());
-        item.setItemMeta(meta);
-        return item;
+        return hatItem(hat).clone();
+    }
+
+    private ItemStack hatItem(HatCosmetic hat) {
+        return built.computeIfAbsent(hat, h -> {
+            ItemBuilder builder = h.item().builder(plugin.getLogger())
+                    .name(h.name())
+                    .lore(h.lore())
+                    .unbreakable()
+                    .hideTooltipExtras();
+            builder.meta().getPersistentDataContainer().set(key, PersistentDataType.STRING, h.id());
+            return builder.build();
+        });
+    }
+
+    /** 머리 칸이 비었거나 이미 모자라서 모자를 씌울 수 있는지. */
+    private boolean headFree(ItemStack helmet) {
+        return helmet == null || helmet.getType().isAir() || isHat(helmet);
     }
 
     /** 미리보기로 모자를 씌울 수 있는지 (진짜 투구를 쓰고 있으면 안 된다). */
     public boolean canPreview(Player player) {
-        ItemStack helmet = player.getInventory().getHelmet();
-        return helmet == null || helmet.getType().isAir() || isHat(helmet);
+        return headFree(player.getInventory().getHelmet());
     }
 
     /** 모자를 쓸 수 있게 머리 칸을 비운다. */
     public Room makeRoom(Player player) {
         PlayerInventory inv = player.getInventory();
         ItemStack helmet = inv.getHelmet();
-        if (helmet == null || helmet.getType().isAir() || isHat(helmet)) {
+        if (headFree(helmet)) {
             return Room.FREE;
         }
         if (helmet.containsEnchantment(Enchantment.BINDING_CURSE)) {
@@ -145,15 +184,14 @@ public final class HatService implements Listener {
                 ? null : plugin.manager().equipped(player, Category.HAT, HatCosmetic.class);
         PlayerInventory inv = player.getInventory();
         ItemStack helmet = inv.getHelmet();
-        boolean wearingHat = isHat(helmet);
         if (want == null) {
-            if (wearingHat) {
+            if (isHat(helmet)) {
                 inv.setHelmet(null);
             }
             return;
         }
-        if (wearingHat || helmet == null || helmet.getType().isAir()) {
-            ItemStack hat = create(want);
+        if (headFree(helmet)) {
+            ItemStack hat = hatItem(want);
             if (!hat.equals(helmet)) {
                 inv.setHelmet(hat);
             }
@@ -196,7 +234,11 @@ public final class HatService implements Listener {
     }
 
     private void refreshLater(Player player) {
+        if (!pending.add(player.getUniqueId())) {
+            return;
+        }
         Bukkit.getScheduler().runTask(plugin, () -> {
+            pending.remove(player.getUniqueId());
             if (player.isOnline()) {
                 refresh(player);
             }

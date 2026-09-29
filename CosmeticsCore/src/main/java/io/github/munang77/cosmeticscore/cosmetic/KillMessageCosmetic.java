@@ -1,5 +1,7 @@
 package io.github.munang77.cosmeticscore.cosmetic;
 
+import io.github.munang77.cosmeticscore.util.Text;
+
 /** 상대를 처치했을 때 사망 메시지를 바꾼다. */
 public final class KillMessageCosmetic extends Cosmetic {
 
@@ -10,8 +12,8 @@ public final class KillMessageCosmetic extends Cosmetic {
         this.message = message;
     }
 
-    /** 색이 입혀진 메시지 ({killer}, {victim} 자리표시자). */
-    public String message() {
-        return message;
+    /** 이름을 채운 사망 메시지 (실제 사망과 미리보기가 같은 모양이 되도록 한곳에서 만든다). */
+    public String format(String killer, String victim) {
+        return Text.replace(message, "killer", killer, "victim", victim);
     }
 }

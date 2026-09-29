@@ -9,12 +9,10 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.ToIntFunction;
 
 import io.github.munang77.cosmeticscore.CosmeticsCore;
-import io.github.munang77.cosmeticscore.Messages;
 import io.github.munang77.cosmeticscore.Settings;
 import io.github.munang77.cosmeticscore.cosmetic.Cosmetic;
 import io.github.munang77.cosmeticscore.data.PlayerData;
 import io.github.munang77.cosmeticscore.hook.EconomyHook;
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 /**
@@ -77,12 +75,8 @@ public final class CrateService {
         data.unlock(reward.id());
         plugin.store().save(data);
         if (settings.broadcastCrate(reward.rarity())) {
-            Messages msg = plugin.messages();
-            String text = msg.get("crate-broadcast", "player", player.getName(), "name", reward.name(),
+            plugin.messages().broadcast("crate-broadcast", "player", player.getName(), "name", reward.name(),
                     "rarity", settings.rarity(reward.rarity()).name());
-            for (Player online : Bukkit.getOnlinePlayers()) {
-                online.sendMessage(msg.prefix() + text);
-            }
         }
         return new Result(Outcome.OK, reward, pool);
     }

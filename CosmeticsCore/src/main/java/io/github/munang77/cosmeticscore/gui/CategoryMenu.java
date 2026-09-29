@@ -110,7 +110,7 @@ public final class CategoryMenu extends Menu {
                 : cosmetic.icon().builder(plugin.getLogger());
         List<String> lore = new ArrayList<>(cosmetic.lore());
         lore.add("");
-        lore.add(msg.get("menu.item.rarity", "rarity", plugin.settings().rarity(cosmetic.rarity()).name()));
+        lore.add(rarityLine(cosmetic));
         if (!owned && cosmetic.price() > 0) {
             lore.add(msg.get("menu.item.price", "price", plugin.economy().format(cosmetic.price())));
         }

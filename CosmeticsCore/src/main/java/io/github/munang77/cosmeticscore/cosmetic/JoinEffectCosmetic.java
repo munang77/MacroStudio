@@ -1,5 +1,6 @@
 package io.github.munang77.cosmeticscore.cosmetic;
 
+import io.github.munang77.cosmeticscore.util.Text;
 import org.bukkit.FireworkEffect;
 
 /** 접속/퇴장할 때 나오는 메시지, 소리, 폭죽. */
@@ -23,14 +24,14 @@ public final class JoinEffectCosmetic extends Cosmetic {
         this.firework = firework;
     }
 
-    /** 색이 입혀진 입장 메시지 ({player} 자리표시자). 없으면 {@code null}. */
-    public String joinMessage() {
-        return joinMessage;
+    /** 이름을 채운 입장 메시지. 없으면 {@code null}. */
+    public String joinMessage(String player) {
+        return joinMessage == null ? null : Text.replace(joinMessage, "player", player);
     }
 
-    /** 색이 입혀진 퇴장 메시지. 없으면 {@code null}. */
-    public String quitMessage() {
-        return quitMessage;
+    /** 이름을 채운 퇴장 메시지. 없으면 {@code null}. */
+    public String quitMessage(String player) {
+        return quitMessage == null ? null : Text.replace(quitMessage, "player", player);
     }
 
     public String sound() {

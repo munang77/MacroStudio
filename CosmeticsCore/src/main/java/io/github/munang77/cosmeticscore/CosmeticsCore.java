@@ -55,8 +55,7 @@ public class CosmeticsCore extends JavaPlugin {
 
         Storage storage = createStorage();
         // MySQL 을 서버 여러 대가 같이 쓰면, 서버를 옮길 때 이전 서버의 저장이 먼저 끝나도록 잠깐 기다렸다가 읽는다
-        long loginDelay = getConfig().getLong("storage.login-delay-ms",
-                storage instanceof SqlStorage sql && sql.shared() ? 300 : 0);
+        long loginDelay = getConfig().getLong("storage.login-delay-ms", storage.shared() ? 300 : 0);
         store = new DataStore(storage, getLogger(), loginDelay);
         manager = new CosmeticManager(this);
         hats = new HatService(this);
@@ -122,8 +121,7 @@ public class CosmeticsCore extends JavaPlugin {
         }
         for (Player player : getServer().getOnlinePlayers()) {
             // 플러그인이 꺼지면 메뉴 클릭을 막을 수 없으므로 열린 메뉴를 닫는다
-            org.bukkit.inventory.Inventory top = player.getOpenInventory().getTopInventory();
-            if (top != null && top.getHolder() instanceof Menu) {
+            if (Menu.of(player, player.getOpenInventory().getTopInventory()) != null) {
                 player.closeInventory();
             }
             if (hats != null) {
@@ -145,10 +143,10 @@ public class CosmeticsCore extends JavaPlugin {
      */
     public int reload() {
         int count = loadFiles();
+        hats.clearCache();
         effects.start();
         for (Player player : getServer().getOnlinePlayers()) {
-            manager.validate(player);
-            manager.applyVisuals(player);
+            manager.resync(player);
         }
         return count;
     }

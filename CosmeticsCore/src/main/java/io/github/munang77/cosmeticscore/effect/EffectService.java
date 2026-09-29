@@ -93,14 +93,17 @@ public final class EffectService implements Listener {
                 continue;
             }
             boolean moving = last != null && last.getWorld() == loc.getWorld() && last.distanceSquared(loc) > 0.0004;
-            List<Player> viewers = plugin.manager().viewers(player, loc);
-            if (viewers.isEmpty()) {
-                continue;
-            }
             ParticleSpec spec = cosmetic.spec();
             int step = particleStep;
+            // 보는 사람은 찍을 점이 처음 나왔을 때 한 번만 구한다 (멈춰 선 발자국처럼 점이 없으면 찾지 않는다)
+            var viewers = new Object() {
+                List<Player> list;
+            };
             cosmetic.style().render(loc, loc.getYaw(), step, moving, player.isSneaking(), point -> {
-                for (Player viewer : viewers) {
+                if (viewers.list == null) {
+                    viewers.list = plugin.manager().viewers(player, loc);
+                }
+                for (Player viewer : viewers.list) {
                     spec.spawn(viewer, point, 1, 0, 0, step);
                 }
             });
@@ -137,11 +140,14 @@ public final class EffectService implements Listener {
                 it.remove();
                 continue;
             }
-            Location at = projectile.getLocation();
-            Player shooter = Bukkit.getPlayer(tracked.shooter);
-            for (Player viewer : plugin.manager().viewers(shooter, at)) {
-                tracked.cosmetic.spec().spawn(viewer, at, tracked.cosmetic.amount(), 0.05, 0, trailStep);
-            }
+            drawTrail(Bukkit.getPlayer(tracked.shooter), tracked.cosmetic, projectile.getLocation(), trailStep);
+        }
+    }
+
+    /** 화살 궤적 한 점. 실제 화살과 미리보기가 같은 모양이 되도록 한곳에서 그린다. */
+    private void drawTrail(Player shooter, ArrowTrailCosmetic cosmetic, Location at, int step) {
+        for (Player viewer : plugin.manager().viewers(shooter, at)) {
+            cosmetic.spec().spawn(viewer, at, cosmetic.amount(), 0.05, 0, step);
         }
     }
 
@@ -226,9 +232,7 @@ public final class EffectService implements Listener {
                 }
                 pos.add(velocity);
                 velocity.multiply(0.99).add(new Vector(0, -0.05, 0));
-                for (Player viewer : plugin.manager().viewers(player, pos)) {
-                    cosmetic.spec().spawn(viewer, pos, cosmetic.amount(), 0.05, 0, age);
-                }
+                drawTrail(player, cosmetic, pos, age);
             }
         }.runTaskTimer(plugin, 0L, 1L);
     }

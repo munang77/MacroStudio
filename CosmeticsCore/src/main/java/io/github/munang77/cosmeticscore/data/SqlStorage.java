@@ -22,6 +22,8 @@ import java.util.regex.Pattern;
 public final class SqlStorage implements Storage {
 
     private static final Pattern TABLE = Pattern.compile("[A-Za-z0-9_]{1,64}");
+    /** 이만큼 쉬었으면 쓰기 전에 연결이 살아 있는지 확인한다. */
+    private static final long VALIDATE_AFTER_MS = 30_000;
 
     private final String url;
     private final String user;
@@ -31,6 +33,7 @@ public final class SqlStorage implements Storage {
     private final Path brokenDir;
     private final Logger log;
     private Connection connection;
+    private long lastUsed;
 
     private SqlStorage(String url, String user, String password, String table, boolean mysql, Path brokenDir,
                        Logger log) {
@@ -73,18 +76,23 @@ public final class SqlStorage implements Storage {
         connection();
     }
 
+    /**
+     * 연결. 한동안 안 썼을 때만 살아 있는지 물어본다 (매번 물어보면 저장할 때마다 DB 를 한 번 더 오간다).
+     * 그 사이 끊겼다면 {@link #run} 이 다시 연결해서 한 번 더 한다.
+     */
     private Connection connection() throws SQLException {
         if (connection != null) {
             boolean ok;
             try {
-                ok = !connection.isClosed() && connection.isValid(2);
+                ok = !connection.isClosed()
+                        && (System.currentTimeMillis() - lastUsed < VALIDATE_AFTER_MS || connection.isValid(2));
             } catch (SQLException e) {
                 ok = false;
             }
             if (ok) {
                 return connection;
             }
-            closeQuietly();
+            close();
         }
         connection = user == null ? DriverManager.getConnection(url) : DriverManager.getConnection(url, user, password);
         try (Statement st = connection.createStatement()) {
@@ -95,14 +103,33 @@ public final class SqlStorage implements Storage {
         return connection;
     }
 
+    private interface Work<T> {
+        T run(Connection connection) throws SQLException;
+    }
+
+    /** 실패하면 연결을 새로 맺고 한 번 더 한다 (DB 가 오래된 연결을 끊은 경우). */
+    private <T> T run(Work<T> work) throws SQLException {
+        T result;
+        try {
+            result = work.run(connection());
+        } catch (SQLException first) {
+            close();
+            result = work.run(connection());
+        }
+        lastUsed = System.currentTimeMillis();
+        return result;
+    }
+
     @Override
     public String read(UUID uuid) throws SQLException {
-        try (PreparedStatement ps = connection().prepareStatement("SELECT data FROM " + table + " WHERE uuid = ?")) {
-            ps.setString(1, uuid.toString());
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getString(1) : null;
+        return run(c -> {
+            try (PreparedStatement ps = c.prepareStatement("SELECT data FROM " + table + " WHERE uuid = ?")) {
+                ps.setString(1, uuid.toString());
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? rs.getString(1) : null;
+                }
             }
-        }
+        });
     }
 
     @Override
@@ -112,12 +139,14 @@ public final class SqlStorage implements Storage {
                         + " ON DUPLICATE KEY UPDATE data = VALUES(data), updated = VALUES(updated)"
                 : "INSERT INTO " + table + " (uuid, data, updated) VALUES (?, ?, ?)"
                         + " ON CONFLICT(uuid) DO UPDATE SET data = excluded.data, updated = excluded.updated";
-        try (PreparedStatement ps = connection().prepareStatement(sql)) {
-            ps.setString(1, uuid.toString());
-            ps.setString(2, yaml);
-            ps.setLong(3, System.currentTimeMillis());
-            ps.executeUpdate();
-        }
+        run(c -> {
+            try (PreparedStatement ps = c.prepareStatement(sql)) {
+                ps.setString(1, uuid.toString());
+                ps.setString(2, yaml);
+                ps.setLong(3, System.currentTimeMillis());
+                return ps.executeUpdate();
+            }
+        });
     }
 
     @Override
@@ -134,7 +163,7 @@ public final class SqlStorage implements Storage {
         }
     }
 
-    /** 서버 여러 대가 같이 쓸 수 있는 저장소(MySQL)인지. */
+    @Override
     public boolean shared() {
         return mysql;
     }
@@ -146,10 +175,6 @@ public final class SqlStorage implements Storage {
 
     @Override
     public void close() {
-        closeQuietly();
-    }
-
-    private void closeQuietly() {
         if (connection != null) {
             try {
                 connection.close();

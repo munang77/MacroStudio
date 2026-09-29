@@ -1,8 +1,11 @@
 package io.github.munang77.cosmeticscore.cosmetic;
 
+import java.util.Arrays;
 import java.util.Locale;
+import java.util.function.IntFunction;
 
 import io.github.munang77.cosmeticscore.util.Colors;
+import io.github.munang77.cosmeticscore.util.Materials;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -66,12 +69,7 @@ public final class ParticleSpec {
         }
         if (type == Particle.DustOptions.class) {
             if (rainbow) {
-                int[] rgb = Colors.rainbow(RAINBOW_STEPS);
-                Object[] cycle = new Object[rgb.length];
-                for (int i = 0; i < rgb.length; i++) {
-                    cycle[i] = new Particle.DustOptions(Color.fromRGB(rgb[i]), size);
-                }
-                return new ParticleSpec(particle, null, cycle);
+                return new ParticleSpec(particle, null, rainbowCycle(rgb -> new Particle.DustOptions(Color.fromRGB(rgb), size)));
             }
             return new ParticleSpec(particle, new Particle.DustOptions(color(s, "color"), size), null);
         }
@@ -82,25 +80,20 @@ public final class ParticleSpec {
         }
         if (type == Color.class) {
             if (rainbow) {
-                int[] rgb = Colors.rainbow(RAINBOW_STEPS);
-                Object[] cycle = new Object[rgb.length];
-                for (int i = 0; i < rgb.length; i++) {
-                    cycle[i] = Color.fromRGB(rgb[i]);
-                }
-                return new ParticleSpec(particle, null, cycle);
+                return new ParticleSpec(particle, null, rainbowCycle(Color::fromRGB));
             }
             return new ParticleSpec(particle, color(s, "color"), null);
         }
         if (type == BlockData.class) {
-            Material block = Material.matchMaterial(s.getString("block", "STONE"));
-            if (block == null || !block.isBlock()) {
+            Material block = Materials.block(s.getString("block", "STONE"));
+            if (block == null) {
                 throw new IllegalArgumentException("block 항목이 블록이 아닙니다: " + s.getString("block"));
             }
             return new ParticleSpec(particle, block.createBlockData(), null);
         }
         if (type == ItemStack.class) {
-            Material item = Material.matchMaterial(s.getString("item", "STONE"));
-            if (item == null || !item.isItem() || item.isAir()) {
+            Material item = Materials.item(s.getString("item", "STONE"));
+            if (item == null) {
                 throw new IllegalArgumentException("item 항목이 아이템이 아닙니다: " + s.getString("item"));
             }
             return new ParticleSpec(particle, new ItemStack(item), null);
@@ -113,6 +106,11 @@ public final class ParticleSpec {
         }
         throw new IllegalArgumentException(particle.name() + " 파티클은 지원하지 않습니다 (필요한 데이터: "
                 + type.getSimpleName() + ")");
+    }
+
+    /** 무지개 색마다 파티클 데이터를 하나씩 만든다. */
+    private static Object[] rainbowCycle(IntFunction<Object> make) {
+        return Arrays.stream(Colors.rainbow(RAINBOW_STEPS)).mapToObj(make).toArray();
     }
 
     private static Particle parseParticle(String name) {
