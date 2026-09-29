@@ -175,3 +175,8 @@ macro-program/
 - 재생 중 ESC 를 누르면 눌린 상태로 남은 키와 마우스 버튼까지 모두 떼어냅니다.
 - 두 번 실행해도 창은 하나만 뜹니다. 이미 떠 있으면 그 창을 앞으로 올립니다
   (두 개가 돌면 단축키가 두 번씩 먹고 재생 입력도 두 배로 나갑니다).
+
+## 함께 들어 있는 것: CosmeticsCore (마인크래프트 플러그인)
+
+`CosmeticsCore/` 폴더는 이 매크로 프로그램과 별개인 마인크래프트 Paper/Spigot 코스메틱 플러그인입니다.
+설명과 빌드 방법은 [CosmeticsCore/README.md](CosmeticsCore/README.md) 를 보세요.
