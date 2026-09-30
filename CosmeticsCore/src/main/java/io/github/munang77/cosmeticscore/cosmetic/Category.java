@@ -9,20 +9,34 @@ import org.bukkit.Material;
 public enum Category {
 
     HAT("hat", "hats", Material.LEATHER_HELMET, 10),
-    BACKPACK("backpack", "backpacks", Material.CHEST, 11),
-    BALLOON("balloon", "balloons", Material.LEAD, 12),
-    PET("pet", "pets", Material.BONE, 13),
-    PARTICLE("particle", "particles", Material.BLAZE_POWDER, 14),
-    ARROW_TRAIL("arrow_trail", "arrow-trails", Material.ARROW, 15),
-    KILL_EFFECT("kill_effect", "kill-effects", Material.DIAMOND_SWORD, 16),
-    KILL_MESSAGE("kill_message", "kill-messages", Material.WRITABLE_BOOK, 20),
-    TITLE("title", "titles", Material.NAME_TAG, 21),
-    CHAT_COLOR("chat_color", "chat-colors", Material.MAGENTA_DYE, 23),
-    JOIN_EFFECT("join_effect", "join-effects", Material.OAK_DOOR, 24);
+    WINGS("wings", "wings", Material.ELYTRA, 11),
+    BACKPACK("backpack", "backpacks", Material.CHEST, 12),
+    TAIL("tail", "tails", Material.RABBIT_FOOT, 13),
+    WAIST("waist", "waist", Material.LEATHER_LEGGINGS, 14),
+    TORSO("torso", "torso", Material.LEATHER_CHESTPLATE, 15),
+    BALLOON("balloon", "balloons", Material.LEAD, 16),
+    PET("pet", "pets", Material.BONE, 19),
+    PARTICLE("particle", "particles", Material.BLAZE_POWDER, 20),
+    ARROW_TRAIL("arrow_trail", "arrow-trails", Material.ARROW, 21),
+    KILL_EFFECT("kill_effect", "kill-effects", Material.DIAMOND_SWORD, 22),
+    KILL_MESSAGE("kill_message", "kill-messages", Material.WRITABLE_BOOK, 23),
+    TITLE("title", "titles", Material.NAME_TAG, 24),
+    CHAT_COLOR("chat_color", "chat-colors", Material.MAGENTA_DYE, 25),
+    JOIN_EFFECT("join_effect", "join-effects", Material.OAK_DOOR, 31);
+
+    /** 몸통에 딱 붙어서 몸 방향과 웅크리기를 따라가는 카테고리. */
+    public boolean isBody() {
+        return this == BACKPACK || this == WINGS || this == TAIL || this == WAIST || this == TORSO;
+    }
 
     /** 몸에 붙어 다니는 디스플레이 엔티티로 보여 주는 카테고리. */
     public boolean isDisplay() {
-        return this == BACKPACK || this == BALLOON || this == PET;
+        return isBody() || this == BALLOON || this == PET;
+    }
+
+    /** 옷장에서 마네킹에 입혀 볼 수 있는 카테고리. */
+    public boolean isWardrobe() {
+        return this == HAT || isDisplay() || this == PARTICLE || this == TITLE;
     }
 
     /**

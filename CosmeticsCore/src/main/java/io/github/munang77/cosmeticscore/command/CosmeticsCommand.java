@@ -45,6 +45,8 @@ public final class CosmeticsCommand implements TabExecutor {
         BUY(false, "buy", "구매"),
         PREVIEW(false, "preview", "미리보기"),
         CRATE(false, "crate", "뽑기"),
+        WARDROBE(false, "wardrobe", "옷장"),
+        PACK(false, "resourcepack", "리소스팩", "pack"),
         KEYS(false, "keys", "열쇠"),
         GIVE(true, "give", "지급"),
         TAKE(true, "take", "회수"),
@@ -73,6 +75,8 @@ public final class CosmeticsCommand implements TabExecutor {
     }
 
     private static final List<String> ALL_WORDS = List.of("all", "전체");
+    private static final List<String> SET_WORDS = List.of("설정", "set");
+    private static final List<String> CLEAR_WORDS = List.of("삭제", "clear", "unset");
 
     private final CosmeticsCore plugin;
 
@@ -121,6 +125,9 @@ public final class CosmeticsCommand implements TabExecutor {
             case BUY -> withCosmetic(sender, args, (player, c) -> plugin.manager().purchase(player, c));
             case PREVIEW -> withCosmetic(sender, args, (player, c) -> plugin.manager().preview(player, c));
             case CRATE -> ifPlayer(sender, player -> CrateMenu.openCrate(plugin, player));
+            case WARDROBE -> wardrobe(sender, args);
+            case PACK -> ifPlayer(sender, player -> msg.send(player,
+                    plugin.pack().send(player) ? "resource-pack.sent" : "resource-pack.not-configured"));
             case KEYS -> keys(sender, args);
             case GIVE -> grant(sender, args, true);
             case TAKE -> grant(sender, args, false);
@@ -186,6 +193,35 @@ public final class CosmeticsCommand implements TabExecutor {
                 return;
             }
             plugin.manager().unequip(player, category, true);
+        });
+    }
+
+    /** {@code /cos 옷장 [카테고리]}, 관리자는 {@code /cos 옷장 설정|삭제} 로 옷장 자리를 정한다. */
+    private void wardrobe(CommandSender sender, String[] args) {
+        ifPlayer(sender, player -> {
+            Messages msg = plugin.messages();
+            if (args.length < 2) {
+                plugin.wardrobe().open(player, null);
+                return;
+            }
+            String word = args[1].toLowerCase(Locale.ROOT);
+            if (SET_WORDS.contains(word) || CLEAR_WORDS.contains(word)) {
+                if (!player.hasPermission(ADMIN)) {
+                    msg.send(player, "no-permission");
+                    return;
+                }
+                boolean set = SET_WORDS.contains(word);
+                plugin.wardrobe().setFixedLocation(set ? player.getLocation() : null);
+                msg.send(player, set ? "wardrobe.location-set" : "wardrobe.location-cleared");
+                return;
+            }
+            String input = join(args, 1);
+            Category category = Category.parse(input, msg::category);
+            if (category == null || !category.isWardrobe()) {
+                msg.send(player, "unknown-category", "category", input);
+                return;
+            }
+            plugin.wardrobe().open(player, category);
         });
     }
 
@@ -374,6 +410,19 @@ public final class CosmeticsCommand implements TabExecutor {
                         options.addAll(ALL_WORDS);
                     }
                     options.addAll(categoryWords(true));
+                    yield filter(options, args[1]);
+                }
+                case WARDROBE -> {
+                    List<String> options = new ArrayList<>();
+                    for (Category category : Category.values()) {
+                        if (category.isWardrobe()) {
+                            options.add(plugin.messages().category(category).replace(" ", ""));
+                        }
+                    }
+                    if (admin) {
+                        options.addAll(SET_WORDS);
+                        options.addAll(CLEAR_WORDS);
+                    }
                     yield filter(options, args[1]);
                 }
                 case GIVE, TAKE -> filter(onlineNames(), args[1]);

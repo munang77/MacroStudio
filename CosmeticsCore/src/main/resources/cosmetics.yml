@@ -24,6 +24,19 @@
 #    texture            플레이어 머리 텍스처 (textures.minecraft.net 주소, 해시, 또는 base64 Value)
 #                       texture 만 적으면 material 은 자동으로 PLAYER_HEAD
 #
+#
+#  몸 장식 (날개·백팩·꼬리·허리·상체) 추가 항목
+#    offset     기본 자리에서 옮기기 [오른쪽, 위, 앞] (칸)
+#    rotation   모델 돌리기 [x, y, z] (도)
+#    pivot      돌거나 흔들릴 때 제자리에 있는 점 [오른쪽, 위, 앞] (모델 가운데 기준, 칸)
+#    mirror     true 면 오른쪽 모델을 왼쪽에 거울처럼 하나 더 (날개는 기본 true)
+#    animation  NONE, FLAP(퍼덕임), SWAY(살랑임), SWING(앞뒤 흔들림), BOB(오르내림), SPIN(회전)
+#    animation-speed / animation-angle / spread(날개가 뒤로 젖힌 각도) / animation-height(BOB 높이)
+#
+#  custom-model-data 가 71300xx 인 항목은 플러그인에 들어 있는 리소스팩 모델입니다.
+#  리소스팩 없이도 원래 아이템 모양으로 보이지만, 제대로 보려면 config.yml 의 resource-pack 을 켜 주세요.
+#  모델 원본은 resourcepack/blockbench/*.bbmodel (블록벤치에서 열어 고칠 수 있음)
+#
 #  파티클 이름은 https://jd.papermc.io/paper/org/bukkit/Particle.html 참고
 #    DUST 계열은 color("#RRGGBB"), size 를 쓰고, rainbow: true 면 무지개색으로 바뀝니다
 #    BLOCK 계열은 block: REDSTONE_BLOCK 처럼 블록을 적습니다
@@ -61,6 +74,31 @@ hats:
     name: "&a수박 머리"
     material: MELON
     price: 3000
+  # ── 리소스팩 모델 모자
+  top_hat:
+    name: "&8&l신사 모자"
+    lore:
+      - "&7품격 있는 실크햇"
+    material: PAPER
+    custom-model-data: 7130011
+    rarity: rare
+    price: 15000
+  witch_hat:
+    name: "&5마녀 모자"
+    lore:
+      - "&7끝이 뒤로 살짝 꺾인 고깔모자"
+    material: PAPER
+    custom-model-data: 7130012
+    rarity: epic
+    price: 25000
+  bunny_ears:
+    name: "&f토끼 귀"
+    lore:
+      - "&7깡충깡충"
+    material: PAPER
+    custom-model-data: 7130013
+    rarity: rare
+    price: 12000
   # 리소스팩/머리 텍스처 예시
   # custom_crown:
   #   name: "&e커스텀 왕관"
@@ -69,6 +107,52 @@ hats:
   # head_hat:
   #   name: "&d귀여운 머리"
   #   texture: "http://textures.minecraft.net/texture/<해시>"
+
+# ── 날개 : 등 뒤에서 퍼덕이는 한 쌍 (오른쪽 한 짝 모델을 거울처럼 왼쪽에도 붙입니다)
+wings:
+  feather_wings:
+    name: "&f&l천사 날개"
+    lore:
+      - "&7하얀 깃털이 천천히 퍼덕입니다"
+    material: FEATHER
+    custom-model-data: 7130001
+    scale: 0.9
+    rarity: legendary
+    price: 80000
+  demon_wings:
+    name: "&4&l악마 날개"
+    lore:
+      - "&7박쥐 같은 날개막"
+    material: FEATHER
+    custom-model-data: 7130002
+    scale: 0.9
+    animation-speed: 0.8
+    animation-angle: 12
+    rarity: epic
+    price: 60000
+  butterfly_wings:
+    name: "&b나비 날개"
+    lore:
+      - "&7파랑 모르포 나비"
+    material: FEATHER
+    custom-model-data: 7130003
+    scale: 0.7
+    animation-speed: 2.4
+    animation-angle: 30
+    spread: 8
+    rarity: rare
+    price: 30000
+  elytra_wings:
+    name: "&7겉날개 장식"
+    lore:
+      - "&7리소스팩 없이도 보이는 날개"
+    material: ELYTRA
+    mirror: false
+    animation: SWING
+    animation-angle: 4
+    scale: 0.9
+    offset: [0, -0.1, -0.05]
+    free: true
 
 # ── 백팩 : 등에 붙어 다니는 장식 (다른 사람도 보임, 텔레포트·탈것 방해 없음)
 #   scale     크기 (기본 0.6)
@@ -96,6 +180,102 @@ backpacks:
     material: BEEHIVE
     rarity: rare
 
+  # ── 리소스팩 모델 (몸 가운데 기준으로 만든 모델이라 offset 으로 몸 쪽으로 당깁니다)
+  cape:
+    name: "&c&l왕의 망토"
+    lore:
+      - "&7걸을 때마다 펄럭입니다"
+    material: LEATHER
+    custom-model-data: 7130014
+    scale: 1.0
+    offset: [0, 0, 0.28]
+    rotation: [6, 0, 0]
+    pivot: [0, 0.4, -0.17]
+    animation: SWING
+    animation-angle: 6
+    rarity: legendary
+    price: 70000
+  adventurer_backpack:
+    name: "&6모험가 배낭"
+    lore:
+      - "&7침낭까지 챙긴 든든한 배낭"
+    material: LEATHER
+    custom-model-data: 7130015
+    scale: 1.0
+    offset: [0, 0, 0.28]
+    rarity: epic
+    price: 35000
+
+# ── 꼬리 : 엉덩이 뒤에서 살랑이는 꼬리
+tails:
+  fox_tail:
+    name: "&6여우 꼬리"
+    lore:
+      - "&7복슬복슬, 끝은 하얗게"
+    material: RABBIT_FOOT
+    custom-model-data: 7130004
+    rarity: epic
+    price: 30000
+  cat_tail:
+    name: "&8고양이 꼬리"
+    lore:
+      - "&7끝이 살짝 말려 올라간 꼬리"
+    material: RABBIT_FOOT
+    custom-model-data: 7130005
+    animation-speed: 0.7
+    animation-angle: 20
+    rarity: rare
+    price: 15000
+  dragon_tail:
+    name: "&2&l용의 꼬리"
+    lore:
+      - "&7가시 돋친 비늘 꼬리"
+    material: RABBIT_FOOT
+    custom-model-data: 7130006
+    scale: 1.1
+    offset: [0, -0.05, 0]
+    animation-speed: 0.6
+    animation-angle: 10
+    rarity: legendary
+    price: 75000
+
+# ── 허리 장식 : 허리에 두르는 벨트, 검집 (모델은 몸 가운데 기준, 한 칸 = 16픽셀)
+waist:
+  belt_pouch:
+    name: "&6모험가 벨트"
+    lore:
+      - "&7작은 주머니가 달린 가죽 벨트"
+    material: LEATHER
+    custom-model-data: 7130007
+    rarity: rare
+    price: 12000
+  waist_katana:
+    name: "&8&l허리 검"
+    lore:
+      - "&7왼쪽 허리에 찬 검집"
+    material: LEATHER
+    custom-model-data: 7130008
+    rarity: epic
+    price: 28000
+
+# ── 상체 장식 : 목도리, 목걸이, 메달 (모델은 몸 가운데 기준)
+torso:
+  scarf:
+    name: "&c빨간 목도리"
+    lore:
+      - "&7따뜻한 털실 목도리"
+    material: STRING
+    custom-model-data: 7130009
+    rarity: rare
+    price: 10000
+  medal:
+    name: "&6&l금메달"
+    lore:
+      - "&7일등의 증표"
+    material: GOLD_NUGGET
+    custom-model-data: 7130010
+    rarity: legendary
+
 # ── 풍선 : 줄에 매달려 머리 위에서 흔들리는 풍선
 #   string  줄로 쓸 블록 (none 이면 줄 없음, 기본 WHITE_WOOL)
 balloons:
@@ -112,6 +292,14 @@ balloons:
     name: "&6호박 풍선"
     material: JACK_O_LANTERN
     rarity: rare
+  heart_balloon:
+    name: "&c&l하트 풍선"
+    lore:
+      - "&7두근두근"
+    material: RED_DYE
+    custom-model-data: 7130016
+    rarity: epic
+    price: 20000
   rainbow_balloon:
     name: "&#FF5555무&#FFAA00지&#FFFF55개 &#55FF55풍&#55FFFF선"
     icon: WHITE_WOOL

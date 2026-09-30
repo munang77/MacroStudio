@@ -12,6 +12,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -22,6 +23,7 @@ import java.util.logging.Logger;
 import io.github.munang77.cosmeticscore.cosmetic.Category;
 import io.github.munang77.cosmeticscore.cosmetic.CosmeticRegistry;
 import io.github.munang77.cosmeticscore.cosmetic.KillEffectCosmetic;
+import io.github.munang77.cosmeticscore.cosmetic.Motion;
 import io.github.munang77.cosmeticscore.cosmetic.ParticleCosmetic;
 import io.github.munang77.cosmeticscore.cosmetic.ParticleStyle;
 import io.github.munang77.cosmeticscore.cosmetic.TitleCosmetic;
@@ -129,12 +131,25 @@ class DataAndConfigTest {
     void bundledCosmeticsAreValid() throws Exception {
         YamlConfiguration yaml = bundled("cosmetics.yml");
         int total = 0;
+        Set<String> ids = new HashSet<>();
         for (Category category : Category.values()) {
             ConfigurationSection section = yaml.getConfigurationSection(category.section());
             assertNotNull(section, category.section() + " 섹션이 없음");
             for (String id : section.getKeys(false)) {
                 ConfigurationSection s = section.getConfigurationSection(id);
                 total++;
+                assertTrue(ids.add(id), "아이디가 겹침: " + id);
+                String animation = s.getString("animation");
+                if (animation != null) {
+                    Motion.valueOf(animation);
+                }
+                int cmd = s.getInt("custom-model-data", 0);
+                if (cmd >= 7_130_000 && cmd < 7_140_000) {
+                    // 플러그인 리소스팩 모델: 그 아이템의 정의에 이 번호가 있어야 한다
+                    String item = s.getString("material").toLowerCase(Locale.ROOT);
+                    String definition = resource("pack/assets/minecraft/items/" + item + ".json");
+                    assertTrue(definition.contains("\"threshold\": " + cmd + ","), id + " 의 모델 " + cmd + " 이 리소스팩에 없음");
+                }
                 for (String key : List.of("material", "icon", "block", "string")) {
                     String name = s.getString(key);
                     if (name != null) {
@@ -164,7 +179,26 @@ class DataAndConfigTest {
                 }
             }
         }
-        assertTrue(total >= 50, "기본 코스메틱 수: " + total);
+        assertTrue(total >= 70, "기본 코스메틱 수: " + total);
+    }
+
+    /** 리소스팩 목록에 적힌 파일이 모두 들어 있는지. */
+    @Test
+    void bundledResourcePackIsComplete() throws Exception {
+        List<String> files = resource("pack/index.txt").lines().filter(l -> !l.isBlank()).toList();
+        assertTrue(files.contains("pack.mcmeta"));
+        for (String file : files) {
+            try (InputStream in = getClass().getClassLoader().getResourceAsStream("pack/" + file)) {
+                assertNotNull(in, "리소스팩 파일이 없음: " + file);
+            }
+        }
+    }
+
+    private String resource(String path) throws Exception {
+        try (InputStream in = getClass().getClassLoader().getResourceAsStream(path)) {
+            assertNotNull(in, path + " 이 없음");
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 
     /** 기본 messages.yml 에 코드에서 쓰는 문구가 모두 있는지. */
@@ -190,7 +224,17 @@ class DataAndConfigTest {
                 "player-not-found", "player-only", "preview-chat-sample", "preview-end", "preview-helmet",
                 "preview-once", "preview-start", "preview-victim", "purchase-failed", "purchased", "reload-failed",
                 "reloaded", "taken", "toggle-off", "toggle-on", "unequipped", "unequipped-all", "unknown-category",
-                "unknown-cosmetic")) {
+                "unknown-cosmetic", "confirm-purchase-wardrobe", "menu.wardrobe.name", "menu.wardrobe.lore",
+                "wardrobe.disabled", "wardrobe.busy", "wardrobe.empty", "wardrobe.no-space", "wardrobe.failed",
+                "wardrobe.closed", "wardrobe.timeout", "wardrobe.location-set", "wardrobe.location-cleared",
+                "wardrobe.help", "wardrobe.action-bar", "wardrobe.header", "wardrobe.info", "wardrobe.info-none",
+                "wardrobe.status.equipped", "wardrobe.status.owned", "wardrobe.status.price", "wardrobe.status.locked",
+                "wardrobe.button.prev-item", "wardrobe.button.next-item", "wardrobe.button.prev-category",
+                "wardrobe.button.next-category", "wardrobe.button.equip", "wardrobe.button.wearing",
+                "wardrobe.button.take-off", "wardrobe.button.buy", "wardrobe.button.locked",
+                "wardrobe.button.rotate-on", "wardrobe.button.rotate-off", "wardrobe.button.exit",
+                "resource-pack.sent", "resource-pack.not-configured", "resource-pack.declined",
+                "resource-pack.failed")) {
             assertTrue(yaml.contains(key), "messages.yml 에 " + key + " 가 없음");
         }
         for (Category category : Category.values()) {

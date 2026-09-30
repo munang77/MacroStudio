@@ -21,12 +21,13 @@ import org.bukkit.configuration.file.FileConfiguration;
 /** config.yml 을 읽어 둔 값. 다시 불러오면 통째로 새 객체로 바뀐다. */
 public final class Settings {
 
-    public static final int MAIN_MENU_SIZE = 45;
+    public static final int MAIN_MENU_SIZE = 54;
     /** 메인 메뉴의 고정 버튼 자리 (카테고리 버튼을 여기에 둘 수 없다). */
     public static final int PROFILE_SLOT = 4;
-    public static final int CRATE_SLOT = 22;
-    public static final int TOGGLE_SLOT = 39;
-    public static final int UNEQUIP_ALL_SLOT = 41;
+    public static final int WARDROBE_SLOT = 38;
+    public static final int CRATE_SLOT = 42;
+    public static final int TOGGLE_SLOT = 48;
+    public static final int UNEQUIP_ALL_SLOT = 50;
 
     /** 등급 이름(색 포함)과 뽑기 가중치. */
     public record Rarity(String key, String name, int weight) {
@@ -49,6 +50,16 @@ public final class Settings {
     private final boolean crateEnabled;
     private final double cratePrice;
     private final Set<String> crateBroadcast = new HashSet<>();
+    private final boolean wardrobeEnabled;
+    private final double wardrobeDistance;
+    private final int wardrobeMaxSeconds;
+    private final boolean packSend;
+    private final boolean packRequired;
+    private final String packPrompt;
+    private final String packUrl;
+    private final boolean packSelfHost;
+    private final int packPort;
+    private final String packAddress;
     private final Map<String, Rarity> rarities;
     private final boolean showLocked;
     private final Material lockedIcon;
@@ -78,12 +89,22 @@ public final class Settings {
         for (String r : c.getStringList("crate.broadcast-rarities")) {
             crateBroadcast.add(r.toLowerCase(Locale.ROOT));
         }
+        wardrobeEnabled = c.getBoolean("wardrobe.enabled", true);
+        wardrobeDistance = Math.max(2.0, Math.min(5.0, c.getDouble("wardrobe.distance", 2.8)));
+        wardrobeMaxSeconds = Math.max(0, c.getInt("wardrobe.max-seconds", 300));
+        packSend = c.getBoolean("resource-pack.send", false);
+        packRequired = c.getBoolean("resource-pack.required", false);
+        packPrompt = c.getString("resource-pack.prompt", "");
+        packUrl = c.getString("resource-pack.url", "").trim();
+        packSelfHost = c.getBoolean("resource-pack.self-host.enabled", true);
+        packPort = Math.max(1, Math.min(65535, c.getInt("resource-pack.self-host.port", 8163)));
+        packAddress = c.getString("resource-pack.self-host.address", "").trim();
         rarities = readRarities(c.getConfigurationSection("rarities"), log);
         showLocked = c.getBoolean("menu.show-locked", true);
         lockedIcon = material(c.getString("menu.locked-icon", "GRAY_DYE"), "menu.locked-icon", log);
         filler = material(c.getString("menu.filler", "GRAY_STAINED_GLASS_PANE"), "menu.filler", log);
 
-        Set<Integer> used = new HashSet<>(Set.of(PROFILE_SLOT, CRATE_SLOT, TOGGLE_SLOT, UNEQUIP_ALL_SLOT));
+        Set<Integer> used = new HashSet<>(Set.of(PROFILE_SLOT, WARDROBE_SLOT, CRATE_SLOT, TOGGLE_SLOT, UNEQUIP_ALL_SLOT));
         for (Category cat : Category.values()) {
             ConfigurationSection s = c.getConfigurationSection("menu.categories." + cat.key());
             int wanted = s == null ? cat.defaultSlot() : s.getInt("slot", cat.defaultSlot());
@@ -207,6 +228,52 @@ public final class Settings {
 
     public boolean broadcastCrate(String rarity) {
         return crateBroadcast.contains(rarity);
+    }
+
+    public boolean wardrobeEnabled() {
+        return wardrobeEnabled;
+    }
+
+    /** 플레이어와 마네킹 사이 거리 (칸). */
+    public double wardrobeDistance() {
+        return wardrobeDistance;
+    }
+
+    /** 옷장을 열어 둘 수 있는 최대 시간 (초, 0 이면 제한 없음). */
+    public int wardrobeMaxSeconds() {
+        return wardrobeMaxSeconds;
+    }
+
+    /** 접속한 플레이어에게 코스메틱 리소스팩을 보낼지. */
+    public boolean packSend() {
+        return packSend;
+    }
+
+    /** 거절하면 서버에서 나가게 할지. */
+    public boolean packRequired() {
+        return packRequired;
+    }
+
+    public String packPrompt() {
+        return packPrompt;
+    }
+
+    /** 직접 올린 리소스팩 주소 (비었으면 플러그인이 직접 보낸다). */
+    public String packUrl() {
+        return packUrl;
+    }
+
+    public boolean packSelfHost() {
+        return packSelfHost;
+    }
+
+    public int packPort() {
+        return packPort;
+    }
+
+    /** 플레이어가 리소스팩을 받을 서버 주소 (비었으면 server.properties 의 server-ip). */
+    public String packAddress() {
+        return packAddress;
     }
 
     /** 등급 정보. 모르는 등급이면 common. */

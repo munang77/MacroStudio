@@ -93,13 +93,13 @@ class CosmeticPartsTest {
     void displayCycleWalksThroughItems() {
         DisplayCosmetic balloon = new DisplayCosmetic(new Cosmetic.Info("b", "b", List.of(), ItemSpec.of(Material.RED_WOOL),
                 false, "p", "common", 0, true), Category.BALLOON, ItemSpec.of(Material.RED_WOOL),
-                List.of(ItemSpec.of(Material.RED_WOOL), ItemSpec.of(Material.BLUE_WOOL)), 10, 0.7f, 0, null, null);
+                List.of(ItemSpec.of(Material.RED_WOOL), ItemSpec.of(Material.BLUE_WOOL)), 10, 0.7f, Attachment.NONE, null, null);
         assertEquals(Material.RED_WOOL, balloon.itemAt(0).material());
         assertEquals(Material.RED_WOOL, balloon.itemAt(9).material());
         assertEquals(Material.BLUE_WOOL, balloon.itemAt(10).material());
         assertEquals(Material.RED_WOOL, balloon.itemAt(20).material());
         assertThrows(IllegalArgumentException.class, () -> new DisplayCosmetic(balloon.icon() == null ? null
                 : new Cosmetic.Info("x", "x", List.of(), ItemSpec.of(Material.STONE), false, "p", "common", 0, true),
-                Category.HAT, ItemSpec.of(Material.STONE), List.of(), 1, 1, 0, null, null));
+                Category.HAT, ItemSpec.of(Material.STONE), List.of(), 1, 1, Attachment.NONE, null, null));
     }
 }

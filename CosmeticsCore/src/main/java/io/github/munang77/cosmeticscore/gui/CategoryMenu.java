@@ -29,6 +29,7 @@ public final class CategoryMenu extends Menu {
     private static final int PREVIOUS = 48;
     private static final int UNEQUIP = 49;
     private static final int NEXT = 50;
+    private static final int WARDROBE = 53;
 
     private final Category category;
     private final List<Cosmetic> entries;
@@ -99,6 +100,13 @@ public final class CategoryMenu extends Menu {
         inventory.setItem(UNEQUIP, new ItemBuilder(Material.BARRIER)
                 .name(msg.get("menu.unequip-category.name", "category", categoryName))
                 .build());
+        if (hasWardrobe()) {
+            inventory.setItem(WARDROBE, new ItemBuilder(Material.ARMOR_STAND)
+                    .name(msg.get("menu.wardrobe.name"))
+                    .lore(msg.list("menu.wardrobe.lore"))
+                    .hideTooltipExtras()
+                    .build());
+        }
         fill();
     }
 
@@ -147,6 +155,12 @@ public final class CategoryMenu extends Menu {
                     sound("entity.item.pickup", 0.8f);
                 }
                 render();
+                return;
+            }
+            case WARDROBE -> {
+                if (hasWardrobe()) {
+                    closeLater(() -> plugin.wardrobe().open(viewer, category));
+                }
                 return;
             }
             default -> {
@@ -199,6 +213,10 @@ public final class CategoryMenu extends Menu {
             sound("entity.player.levelup", 1.6f);
         }
         render();
+    }
+
+    private boolean hasWardrobe() {
+        return category.isWardrobe() && plugin.settings().wardrobeEnabled();
     }
 
     private static int indexOf(int slot) {

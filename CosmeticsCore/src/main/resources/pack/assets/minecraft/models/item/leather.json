@@ -1,0 +1,44 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "minecraft:item/leather"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "custom_model_data": 7130007
+      },
+      "model": "cosmeticscore:item/belt_pouch"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130008
+      },
+      "model": "cosmeticscore:item/waist_katana"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130009
+      },
+      "model": "cosmeticscore:item/vanilla/leather"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130014
+      },
+      "model": "cosmeticscore:item/cape"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130015
+      },
+      "model": "cosmeticscore:item/adventurer_backpack"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130016
+      },
+      "model": "cosmeticscore:item/vanilla/leather"
+    }
+  ]
+}

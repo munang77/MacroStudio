@@ -1,0 +1,91 @@
+{
+  "credit": "CosmeticsCore (resourcepack/generate.py)",
+  "texture_size": [
+    64,
+    64
+  ],
+  "textures": {
+    "0": "cosmeticscore:item/demon_wing",
+    "particle": "cosmeticscore:item/demon_wing"
+  },
+  "elements": [
+    {
+      "name": "wing",
+      "from": [
+        8,
+        -4,
+        8
+      ],
+      "to": [
+        32,
+        20,
+        8
+      ],
+      "faces": {
+        "south": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#0"
+        },
+        "north": {
+          "uv": [
+            16,
+            0,
+            0,
+            16
+          ],
+          "texture": "#0"
+        }
+      }
+    }
+  ],
+  "display": {
+    "gui": {
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "translation": [
+        -6.684,
+        -0.0,
+        -0.0
+      ],
+      "scale": [
+        0.557,
+        0.557,
+        0.557
+      ]
+    },
+    "ground": {
+      "translation": [
+        0,
+        2,
+        0
+      ],
+      "scale": [
+        0.4,
+        0.4,
+        0.4
+      ]
+    },
+    "thirdperson_righthand": {
+      "scale": [
+        0.4,
+        0.4,
+        0.4
+      ]
+    },
+    "firstperson_righthand": {
+      "scale": [
+        0.4,
+        0.4,
+        0.4
+      ]
+    }
+  }
+}

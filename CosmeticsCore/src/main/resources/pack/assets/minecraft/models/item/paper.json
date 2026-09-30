@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "minecraft:item/paper"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "custom_model_data": 7130011
+      },
+      "model": "cosmeticscore:item/top_hat"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130012
+      },
+      "model": "cosmeticscore:item/witch_hat"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130013
+      },
+      "model": "cosmeticscore:item/bunny_ears"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130014
+      },
+      "model": "cosmeticscore:item/vanilla/paper"
+    }
+  ]
+}

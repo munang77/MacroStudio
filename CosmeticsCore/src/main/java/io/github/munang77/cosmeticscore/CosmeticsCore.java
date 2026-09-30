@@ -22,6 +22,8 @@ import io.github.munang77.cosmeticscore.gui.MenuListener;
 import io.github.munang77.cosmeticscore.hat.HatService;
 import io.github.munang77.cosmeticscore.hook.EconomyHook;
 import io.github.munang77.cosmeticscore.hook.PlaceholderHook;
+import io.github.munang77.cosmeticscore.pack.ResourcePackService;
+import io.github.munang77.cosmeticscore.wardrobe.WardrobeService;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
@@ -45,6 +47,8 @@ public class CosmeticsCore extends JavaPlugin {
     private DisplayService displays;
     private EconomyHook economy;
     private CrateService crates;
+    private WardrobeService wardrobe;
+    private ResourcePackService pack;
     private BukkitTask previewTask;
 
     @Override
@@ -64,6 +68,8 @@ public class CosmeticsCore extends JavaPlugin {
         displays = new DisplayService(this);
         economy = new EconomyHook(getLogger());
         crates = new CrateService(this);
+        wardrobe = new WardrobeService(this);
+        pack = new ResourcePackService(this);
         int count = loadFiles();
 
         PluginManager pm = getServer().getPluginManager();
@@ -72,6 +78,8 @@ public class CosmeticsCore extends JavaPlugin {
         pm.registerEvents(chat, this);
         pm.registerEvents(effects, this);
         pm.registerEvents(displays, this);
+        pm.registerEvents(wardrobe, this);
+        pm.registerEvents(pack, this);
         pm.registerEvents(new MenuListener(), this);
 
         PluginCommand command = getCommand("cosmetics");
@@ -84,6 +92,8 @@ public class CosmeticsCore extends JavaPlugin {
         effects.start();
         hats.start();
         displays.start();
+        wardrobe.start();
+        pack.start();
         previewTask = getServer().getScheduler().runTaskTimer(this, manager::tickPreviews, 20L, 20L);
         // /reload 등으로 켜졌을 때 이미 접속해 있는 플레이어
         for (Player player : getServer().getOnlinePlayers()) {
@@ -109,6 +119,13 @@ public class CosmeticsCore extends JavaPlugin {
         }
         if (manager != null) {
             manager.clearPreviews();
+        }
+        if (wardrobe != null) {
+            // 옷장 자리로 옮겨 간 플레이어를 먼저 돌려보낸다
+            wardrobe.stop();
+        }
+        if (pack != null) {
+            pack.stop();
         }
         if (effects != null) {
             effects.stop();
@@ -145,6 +162,7 @@ public class CosmeticsCore extends JavaPlugin {
         int count = loadFiles();
         hats.clearCache();
         effects.start();
+        pack.start();
         for (Player player : getServer().getOnlinePlayers()) {
             manager.resync(player);
         }
@@ -251,5 +269,13 @@ public class CosmeticsCore extends JavaPlugin {
 
     public CrateService crates() {
         return crates;
+    }
+
+    public WardrobeService wardrobe() {
+        return wardrobe;
+    }
+
+    public ResourcePackService pack() {
+        return pack;
     }
 }

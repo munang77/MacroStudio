@@ -1,0 +1,41 @@
+{
+  "model": {
+    "type": "minecraft:range_dispatch",
+    "property": "minecraft:custom_model_data",
+    "index": 0,
+    "fallback": {
+      "type": "minecraft:model",
+      "model": "minecraft:item/paper"
+    },
+    "entries": [
+      {
+        "threshold": 7130011,
+        "model": {
+          "type": "minecraft:model",
+          "model": "cosmeticscore:item/top_hat"
+        }
+      },
+      {
+        "threshold": 7130012,
+        "model": {
+          "type": "minecraft:model",
+          "model": "cosmeticscore:item/witch_hat"
+        }
+      },
+      {
+        "threshold": 7130013,
+        "model": {
+          "type": "minecraft:model",
+          "model": "cosmeticscore:item/bunny_ears"
+        }
+      },
+      {
+        "threshold": 7130014,
+        "model": {
+          "type": "minecraft:model",
+          "model": "minecraft:item/paper"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "minecraft:item/feather"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "custom_model_data": 7130001
+      },
+      "model": "cosmeticscore:item/angel_wing"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130002
+      },
+      "model": "cosmeticscore:item/demon_wing"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130003
+      },
+      "model": "cosmeticscore:item/butterfly_wing"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130004
+      },
+      "model": "cosmeticscore:item/vanilla/feather"
+    }
+  ]
+}

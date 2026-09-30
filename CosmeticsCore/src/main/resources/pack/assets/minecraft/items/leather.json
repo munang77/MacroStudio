@@ -1,0 +1,55 @@
+{
+  "model": {
+    "type": "minecraft:range_dispatch",
+    "property": "minecraft:custom_model_data",
+    "index": 0,
+    "fallback": {
+      "type": "minecraft:model",
+      "model": "minecraft:item/leather"
+    },
+    "entries": [
+      {
+        "threshold": 7130007,
+        "model": {
+          "type": "minecraft:model",
+          "model": "cosmeticscore:item/belt_pouch"
+        }
+      },
+      {
+        "threshold": 7130008,
+        "model": {
+          "type": "minecraft:model",
+          "model": "cosmeticscore:item/waist_katana"
+        }
+      },
+      {
+        "threshold": 7130009,
+        "model": {
+          "type": "minecraft:model",
+          "model": "minecraft:item/leather"
+        }
+      },
+      {
+        "threshold": 7130014,
+        "model": {
+          "type": "minecraft:model",
+          "model": "cosmeticscore:item/cape"
+        }
+      },
+      {
+        "threshold": 7130015,
+        "model": {
+          "type": "minecraft:model",
+          "model": "cosmeticscore:item/adventurer_backpack"
+        }
+      },
+      {
+        "threshold": 7130016,
+        "model": {
+          "type": "minecraft:model",
+          "model": "minecraft:item/leather"
+        }
+      }
+    ]
+  }
+}

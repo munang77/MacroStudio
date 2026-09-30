@@ -1,0 +1,41 @@
+{
+  "model": {
+    "type": "minecraft:range_dispatch",
+    "property": "minecraft:custom_model_data",
+    "index": 0,
+    "fallback": {
+      "type": "minecraft:model",
+      "model": "minecraft:item/feather"
+    },
+    "entries": [
+      {
+        "threshold": 7130001,
+        "model": {
+          "type": "minecraft:model",
+          "model": "cosmeticscore:item/angel_wing"
+        }
+      },
+      {
+        "threshold": 7130002,
+        "model": {
+          "type": "minecraft:model",
+          "model": "cosmeticscore:item/demon_wing"
+        }
+      },
+      {
+        "threshold": 7130003,
+        "model": {
+          "type": "minecraft:model",
+          "model": "cosmeticscore:item/butterfly_wing"
+        }
+      },
+      {
+        "threshold": 7130004,
+        "model": {
+          "type": "minecraft:model",
+          "model": "minecraft:item/feather"
+        }
+      }
+    ]
+  }
+}

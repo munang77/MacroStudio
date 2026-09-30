@@ -63,6 +63,14 @@ public final class MainMenu extends Menu {
                     .build());
         }
 
+        if (settings.wardrobeEnabled()) {
+            inventory.setItem(Settings.WARDROBE_SLOT, new ItemBuilder(Material.ARMOR_STAND)
+                    .name(msg.get("menu.wardrobe.name"))
+                    .lore(msg.list("menu.wardrobe.lore"))
+                    .hideTooltipExtras()
+                    .build());
+        }
+
         boolean showOthers = manager.seesOthers(viewer);
         inventory.setItem(Settings.TOGGLE_SLOT, new ItemBuilder(showOthers ? Material.ENDER_EYE : Material.ENDER_PEARL)
                 .name(msg.get(showOthers ? "menu.toggle.name-on" : "menu.toggle.name-off"))
@@ -108,7 +116,9 @@ public final class MainMenu extends Menu {
                 return;
             }
         }
-        if (slot == Settings.CRATE_SLOT && settings.crateEnabled()) {
+        if (slot == Settings.WARDROBE_SLOT && settings.wardrobeEnabled()) {
+            closeLater(() -> plugin.wardrobe().open(viewer, null));
+        } else if (slot == Settings.CRATE_SLOT && settings.crateEnabled()) {
             CrateMenu.openCrate(plugin, viewer);
         } else if (slot == Settings.TOGGLE_SLOT) {
             if (plugin.manager().toggleShowOthers(viewer)) {

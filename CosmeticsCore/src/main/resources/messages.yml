@@ -3,7 +3,11 @@ prefix: "&8[&dCosmetics&8] &r"
 
 categories:
   hat: "모자"
+  wings: "날개"
   backpack: "백팩"
+  tail: "꼬리"
+  waist: "허리 장식"
+  torso: "상체 장식"
   balloon: "풍선"
   pet: "펫"
   particle: "파티클"
@@ -55,6 +59,7 @@ not-enough-money: "&c돈이 부족합니다. (가격 {price}, 가진 돈 {balanc
 purchase-failed: "&c결제에 실패했습니다."
 purchased: "&a{name}&a 구매 완료! &7(-{price})"
 confirm-purchase: "&e{name}&e 을(를) &6{price}&e 에 살까요? 5초 안에 한 번 더 누르면 삽니다."
+confirm-purchase-wardrobe: "&e{name}&e 을(를) &6{price}&e 에 살까요? 5초 안에 구매 버튼을 한 번 더 누르면 사서 바로 입습니다."
 
 # 미리보기
 preview-start: "&b{name}&b 미리보기 {seconds}초! &7(F5 로 내 모습을 볼 수 있어요)"
@@ -93,14 +98,17 @@ help:
   - "&e/cos 해제 [카테고리|전체] &7- 코스메틱 해제"
   - "&e/cos 구매 <아이디> &7- 코스메틱 사기"
   - "&e/cos 미리보기 <아이디> &7- 잠깐 입어 보기"
+  - "&e/cos 옷장 [카테고리] &7- 마네킹에 입혀 보며 고르기"
   - "&e/cos 뽑기 &7- 코스메틱 뽑기"
   - "&e/cos 열쇠 &7- 내 뽑기 열쇠 수"
   - "&e/cos 목록 [카테고리] &7- 코스메틱 목록"
   - "&e/cos 보기 &7- 다른 사람 효과 보기 켜기/끄기"
+  - "&e/cos 리소스팩 &7- 코스메틱 리소스팩 다시 받기"
 help-admin:
   - "&c/cos 지급 <플레이어> <아이디> &7- 코스메틱 지급"
   - "&c/cos 회수 <플레이어> <아이디> &7- 코스메틱 회수"
   - "&c/cos 열쇠 <플레이어> <개수> &7- 뽑기 열쇠 지급 (음수면 회수)"
+  - "&c/cos 옷장 설정|삭제 &7- 지금 서 있는 곳을 옷장 자리로 정하기 / 지우기"
   - "&c/cos 리로드 &7- 설정 다시 불러오기"
   - "&c/cos 이전 &7- YAML 데이터를 SQLite/MySQL 로 옮기기"
 
@@ -140,6 +148,14 @@ menu:
       - "&7킬 이펙트 파티클을 보이거나 숨깁니다."
       - ""
       - "&e클릭해서 바꾸기"
+  wardrobe:
+    name: "&b&l옷장"
+    lore:
+      - "&7마네킹에 입혀 보면서 고릅니다."
+      - "&7날개, 꼬리처럼 등 뒤 장식도"
+      - "&7한눈에 볼 수 있어요."
+      - ""
+      - "&e클릭해서 열기"
   unequip-all:
     name: "&c모두 해제"
     lore:
@@ -164,3 +180,48 @@ menu:
       - "&c✖ 잠김"
     preview:
       - "&b우클릭: 미리보기"
+
+# 옷장 (/cos 옷장)
+wardrobe:
+  disabled: "&c옷장이 꺼져 있습니다."
+  busy: "&c지금은 옷장을 열 수 없습니다. (탈것, 겉날개, 잠자는 중)"
+  empty: "&c옷장에서 입어 볼 코스메틱이 없습니다."
+  no-space: "&c앞이 막혀 있어 옷장을 열 수 없습니다. 앞쪽 3칸이 빈 곳에서 열어 주세요."
+  failed: "&c마네킹을 세우지 못했습니다."
+  closed: "&7옷장을 닫았습니다."
+  timeout: "&7시간이 지나 옷장을 닫았습니다."
+  location-set: "&a지금 서 있는 곳을 옷장 자리로 정했습니다. 바라보는 쪽에 마네킹이 섭니다."
+  location-cleared: "&7옷장 자리를 지웠습니다. 이제 각자 서 있는 곳에서 열립니다."
+  help:
+    - "&b&l옷장 &7- 마네킹에 입혀 보며 고르세요."
+    - "&7 마우스 휠 &f코스메틱 넘기기 &8| &7우클릭 &f떠 있는 버튼 누르기"
+    - "&7 마네킹 우클릭 &f착용/구매 &8| &7웅크리기 &f나가기"
+  action-bar: "&7휠: &f넘기기 &8| &7버튼 우클릭 &8| &7웅크리기: &f나가기"
+  header: "&b[{category}] &7{position}"
+  info: "{name}\n{rarity} &8· {status}"
+  info-none: "&7(없음)\n&8벗은 모습"
+  status:
+    equipped: "&a착용 중"
+    owned: "&e보유"
+    price: "&6{price}"
+    locked: "&c잠김"
+  button:
+    prev-item: "&e◀"
+    next-item: "&e▶"
+    prev-category: "&b« 종류"
+    next-category: "&b종류 »"
+    equip: "&a✔ 착용"
+    wearing: "&a착용 중"
+    take-off: "&7벗기"
+    buy: "&6구매 {price}"
+    locked: "&c잠김"
+    rotate-on: "&d⟳ 회전 켬"
+    rotate-off: "&7⟳ 회전 끔"
+    exit: "&c✖ 나가기"
+
+# 리소스팩
+resource-pack:
+  sent: "&a코스메틱 리소스팩을 보냈습니다."
+  not-configured: "&c이 서버는 코스메틱 리소스팩을 보내도록 설정되어 있지 않습니다."
+  declined: "&7리소스팩을 받지 않으면 일부 코스메틱이 원래 아이템 모양으로 보입니다. &e/cos 리소스팩 &7으로 다시 받을 수 있어요."
+  failed: "&c리소스팩을 받지 못했습니다. 잠시 뒤 &e/cos 리소스팩 &c으로 다시 시도해 주세요."

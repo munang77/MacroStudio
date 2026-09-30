@@ -111,7 +111,7 @@ public final class CosmeticRegistry {
                 }
                 yield new HatCosmetic(info(id, s, category, item, id), item);
             }
-            case BACKPACK, BALLOON, PET -> parseDisplay(category, id, s);
+            case BACKPACK, WINGS, TAIL, WAIST, TORSO, BALLOON, PET -> parseDisplay(category, id, s);
             case PARTICLE -> new ParticleCosmetic(info(id, s, category, null, id), ParticleSpec.parse(s),
                     enumValue(ParticleStyle.class, s, "style", "AURA"));
             case ARROW_TRAIL -> new ArrowTrailCosmetic(info(id, s, category, null, id), ParticleSpec.parse(s),
@@ -147,6 +147,7 @@ public final class CosmeticRegistry {
         float defaultScale = switch (category) {
             case BACKPACK -> 0.6f;
             case BALLOON -> 0.7f;
+            case WINGS, TAIL, WAIST, TORSO -> 1.0f;
             default -> 0.5f;
         };
         float scale = (float) Math.max(0.05, Math.min(4.0, s.getDouble("scale", defaultScale)));
@@ -164,7 +165,39 @@ public final class CosmeticRegistry {
             }
         }
         return new DisplayCosmetic(info(id, s, category, item, id), category, item, cycle,
-                clamp(s.getInt("cycle-ticks", 10), 1, 1200), scale, s.getDouble("offset-y", 0), nameTag, string);
+                clamp(s.getInt("cycle-ticks", 10), 1, 1200), scale, attachment(category, s), nameTag, string);
+    }
+
+    /** 붙는 자리와 움직임. 적지 않은 값은 카테고리 기본값 (날개는 퍼덕이는 한 쌍, 꼬리는 살랑임). */
+    static Attachment attachment(Category category, ConfigurationSection s) {
+        Attachment def = Attachment.defaults(category);
+        // offset-y 는 예전 설정과 맞추려고 남겨 둔 줄임말
+        double offsetY = Math.max(-5, Math.min(5, s.getDouble("offset-y", 0)));
+        Attachment.Vec3 offset = vec3(s, "offset", def.offset(), 5).plus(new Attachment.Vec3(0, offsetY, 0));
+        Motion motion = s.contains("animation") ? enumValue(Motion.class, s, "animation", "NONE") : def.motion();
+        return new Attachment(offset, vec3(s, "rotation", def.rotation(), 360), vec3(s, "pivot", def.pivot(), 5),
+                s.getBoolean("mirror", def.mirror()), motion,
+                Math.max(0, Math.min(10, s.getDouble("animation-speed", def.speed()))),
+                Math.max(0, Math.min(180, s.getDouble("animation-angle", def.angle()))),
+                Math.max(-90, Math.min(90, s.getDouble("spread", def.spread()))),
+                Math.max(0, Math.min(2, s.getDouble("animation-height", 0.06))));
+    }
+
+    /** {@code [x, y, z]} 세 숫자 (각각 절댓값 {@code max} 이하). */
+    private static Attachment.Vec3 vec3(ConfigurationSection s, String key, Attachment.Vec3 def, double max) {
+        if (!s.contains(key)) {
+            return def;
+        }
+        List<Double> v = s.getDoubleList(key);
+        if (v.size() != 3) {
+            throw new IllegalArgumentException(key + " 는 [x, y, z] 세 숫자로 적어야 합니다");
+        }
+        for (double d : v) {
+            if (!Double.isFinite(d) || Math.abs(d) > max) {
+                throw new IllegalArgumentException(key + " 값은 -" + (int) max + " ~ " + (int) max + " 사이여야 합니다: " + v);
+            }
+        }
+        return new Attachment.Vec3(v.get(0), v.get(1), v.get(2));
     }
 
     /** 대소문자와 앞뒤 공백을 무시하고 enum 값을 읽는다. 없으면 쓸 수 있는 값을 모두 알려 준다. */

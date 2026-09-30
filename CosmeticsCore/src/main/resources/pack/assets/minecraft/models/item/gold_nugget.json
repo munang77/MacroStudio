@@ -1,0 +1,20 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "minecraft:item/gold_nugget"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "custom_model_data": 7130010
+      },
+      "model": "cosmeticscore:item/medal"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130011
+      },
+      "model": "cosmeticscore:item/vanilla/gold_nugget"
+    }
+  ]
+}

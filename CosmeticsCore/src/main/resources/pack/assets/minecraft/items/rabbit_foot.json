@@ -1,0 +1,41 @@
+{
+  "model": {
+    "type": "minecraft:range_dispatch",
+    "property": "minecraft:custom_model_data",
+    "index": 0,
+    "fallback": {
+      "type": "minecraft:model",
+      "model": "minecraft:item/rabbit_foot"
+    },
+    "entries": [
+      {
+        "threshold": 7130004,
+        "model": {
+          "type": "minecraft:model",
+          "model": "cosmeticscore:item/fox_tail"
+        }
+      },
+      {
+        "threshold": 7130005,
+        "model": {
+          "type": "minecraft:model",
+          "model": "cosmeticscore:item/cat_tail"
+        }
+      },
+      {
+        "threshold": 7130006,
+        "model": {
+          "type": "minecraft:model",
+          "model": "cosmeticscore:item/dragon_tail"
+        }
+      },
+      {
+        "threshold": 7130007,
+        "model": {
+          "type": "minecraft:model",
+          "model": "minecraft:item/rabbit_foot"
+        }
+      }
+    ]
+  }
+}
