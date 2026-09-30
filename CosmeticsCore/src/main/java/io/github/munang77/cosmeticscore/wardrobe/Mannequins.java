@@ -1,6 +1,8 @@
 package io.github.munang77.cosmeticscore.wardrobe;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -9,7 +11,6 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.ArmorStand;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EntityEquipment;
@@ -23,10 +24,69 @@ import org.bukkit.inventory.meta.SkullMeta;
 final class Mannequins {
 
     private static final Class<? extends LivingEntity> MANNEQUIN = findMannequin();
-    private static volatile Method setBodyYaw;
-    private static volatile boolean bodyYawLooked;
+    // 리플렉션으로 부를 메서드는 처음에 한 번만 찾아 둔다 (없는 버전이면 null)
+    private static final Method SET_BODY_YAW = find(LivingEntity.class, "setBodyYaw", float.class);
+    private static final Method GET_PROFILE = find(Player.class, "getPlayerProfile");
+    private static final Method SET_IMMOVABLE = MANNEQUIN == null ? null : find(MANNEQUIN, "setImmovable", boolean.class);
+    private static final List<ProfileSetter> SET_PROFILE = profileSetters();
+    private static final Method SET_DESCRIPTION = oneArgument("setDescription");
+    private static final Object EMPTY_DESCRIPTION = emptyDescription();
+
+    /**
+     * 스킨 넣는 방법 하나. Spigot 은 {@code setProfile(PlayerProfile)}, Paper 는 {@code setProfile(ResolvableProfile)} 이라
+     * 매개변수가 플레이어 프로필을 바로 받지 못하면 {@code resolvableProfile(...)} 로 바꿔 넘긴다.
+     */
+    private record ProfileSetter(Method set, Method convert) {
+    }
 
     private Mannequins() {
+    }
+
+    private static Method find(Class<?> type, String name, Class<?>... params) {
+        try {
+            return type.getMethod(name, params);
+        } catch (NoSuchMethodException | LinkageError e) {
+            return null;
+        }
+    }
+
+    private static Method oneArgument(String name) {
+        if (MANNEQUIN != null) {
+            for (Method method : MANNEQUIN.getMethods()) {
+                if (method.getName().equals(name) && method.getParameterCount() == 1) {
+                    return method;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static List<ProfileSetter> profileSetters() {
+        List<ProfileSetter> out = new ArrayList<>();
+        if (MANNEQUIN == null) {
+            return out;
+        }
+        for (Method set : MANNEQUIN.getMethods()) {
+            if (!set.getName().equals("setProfile") || set.getParameterCount() != 1) {
+                continue;
+            }
+            Method convert = null;
+            for (Method factory : set.getParameterTypes()[0].getMethods()) {
+                if (factory.getName().equals("resolvableProfile") && factory.getParameterCount() == 1) {
+                    convert = factory;
+                }
+            }
+            out.add(new ProfileSetter(set, convert));
+        }
+        return out;
+    }
+
+    private static Object emptyDescription() {
+        try {
+            return SET_DESCRIPTION == null ? null : SET_DESCRIPTION.getParameterTypes()[0].getMethod("empty").invoke(null);
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            return null;
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -37,11 +97,6 @@ final class Mannequins {
         } catch (ClassNotFoundException | LinkageError e) {
             return null;
         }
-    }
-
-    /** 스킨을 입는 바닐라 마네킹을 쓸 수 있는지. */
-    static boolean skinned() {
-        return MANNEQUIN != null;
     }
 
     /**
@@ -56,8 +111,9 @@ final class Mannequins {
                 LivingEntity entity = world.spawn(at, MANNEQUIN, m -> {
                     setup.accept(m);
                     applySkin(m, owner, log);
-                    call(m, "setImmovable", true);
-                    clearDescription(m);
+                    invoke(SET_IMMOVABLE, m, true);
+                    // 이름 아래 붙는 "NPC" 설명을 지운다
+                    invoke(SET_DESCRIPTION, m, EMPTY_DESCRIPTION);
                 });
                 if (entity.isValid()) {
                     return entity;
@@ -102,82 +158,46 @@ final class Mannequins {
         if (mannequin instanceof ArmorStand) {
             return;
         }
-        Method method = bodyYawMethod();
-        if (method != null) {
-            try {
-                method.invoke(mannequin, yaw);
-            } catch (ReflectiveOperationException | RuntimeException ignored) {
-                // 몸 방향은 머리를 천천히 따라가므로 없어도 된다
-            }
-        }
+        // 몸 방향은 머리를 천천히 따라가므로 없는 버전이어도 된다
+        invoke(SET_BODY_YAW, mannequin, yaw);
     }
 
-    private static Method bodyYawMethod() {
-        if (!bodyYawLooked) {
-            try {
-                setBodyYaw = LivingEntity.class.getMethod("setBodyYaw", float.class);
-            } catch (NoSuchMethodException e) {
-                setBodyYaw = null;
-            }
-            bodyYawLooked = true;
+    /** 있으면 부르고, 없거나 실패하면 넘어간다. */
+    private static void invoke(Method method, Object target, Object argument) {
+        if (method == null || argument == null) {
+            return;
         }
-        return setBodyYaw;
+        try {
+            method.invoke(target, argument);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            // 없는 버전이면 넘어간다
+        }
     }
 
     private static ItemStack copy(ItemStack item) {
         return item == null || item.getType().isAir() ? null : item.clone();
     }
 
-    /**
-     * 플레이어 스킨을 입힌다. Spigot 은 {@code setProfile(PlayerProfile)}, Paper 는
-     * {@code setProfile(ResolvableProfile)} 이라 매개변수 모양을 보고 맞춰 넘긴다.
-     */
+    /** 플레이어 스킨을 입힌다 (Paper 는 getPlayerProfile() 의 반환형이 달라서 직접 부르면 Spigot 에서 깨진다). */
     private static void applySkin(LivingEntity mannequin, Player owner, Logger log) {
+        if (GET_PROFILE == null) {
+            return;
+        }
         try {
-            // Paper 는 getPlayerProfile() 의 반환형이 달라서 직접 부르면 Spigot 에서 깨진다
-            Object profile = owner.getClass().getMethod("getPlayerProfile").invoke(owner);
-            for (Method method : MANNEQUIN.getMethods()) {
-                if (!method.getName().equals("setProfile") || method.getParameterCount() != 1) {
-                    continue;
-                }
-                Class<?> param = method.getParameterTypes()[0];
-                if (param.isInstance(profile)) {
-                    method.invoke(mannequin, profile);
+            Object profile = GET_PROFILE.invoke(owner);
+            for (ProfileSetter setter : SET_PROFILE) {
+                if (setter.set().getParameterTypes()[0].isInstance(profile)) {
+                    setter.set().invoke(mannequin, profile);
                     return;
                 }
-                for (Method factory : param.getMethods()) {
-                    if (factory.getName().equals("resolvableProfile") && factory.getParameterCount() == 1
-                            && factory.getParameterTypes()[0].isInstance(profile)) {
-                        method.invoke(mannequin, factory.invoke(null, profile));
-                        return;
-                    }
+                Method convert = setter.convert();
+                if (convert != null && convert.getParameterTypes()[0].isInstance(profile)) {
+                    setter.set().invoke(mannequin, convert.invoke(null, profile));
+                    return;
                 }
             }
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
             log.log(Level.FINE, "마네킹에 스킨을 입히지 못했습니다.", e);
-        }
-    }
-
-    /** 이름 아래 붙는 "NPC" 설명을 지운다. */
-    private static void clearDescription(Entity mannequin) {
-        try {
-            for (Method method : MANNEQUIN.getMethods()) {
-                if (method.getName().equals("setDescription") && method.getParameterCount() == 1) {
-                    Class<?> param = method.getParameterTypes()[0];
-                    method.invoke(mannequin, param.getMethod("empty").invoke(null));
-                    return;
-                }
-            }
-        } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
-            // 설명이 남아도 쓰는 데는 지장 없다
-        }
-    }
-
-    private static void call(Object target, String name, boolean value) {
-        try {
-            MANNEQUIN.getMethod(name, boolean.class).invoke(target, value);
-        } catch (ReflectiveOperationException | RuntimeException ignored) {
-            // 없는 버전이면 넘어간다
         }
     }
 }

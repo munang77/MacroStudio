@@ -144,13 +144,7 @@ public final class CosmeticRegistry {
             }
             item = cycle.get(0);
         }
-        float defaultScale = switch (category) {
-            case BACKPACK -> 0.6f;
-            case BALLOON -> 0.7f;
-            case WINGS, TAIL, WAIST, TORSO -> 1.0f;
-            default -> 0.5f;
-        };
-        float scale = (float) Math.max(0.05, Math.min(4.0, s.getDouble("scale", defaultScale)));
+        float scale = (float) Math.clamp(s.getDouble("scale", Attachment.slot(category).scale()), 0.05, 4.0);
         // 이름표는 펫에만, 줄은 풍선에만 있다
         String nameTag = category == Category.PET ? s.getString("name-tag") : null;
         nameTag = nameTag == null || nameTag.isBlank() ? null : Text.color(nameTag);
@@ -170,17 +164,16 @@ public final class CosmeticRegistry {
 
     /** 붙는 자리와 움직임. 적지 않은 값은 카테고리 기본값 (날개는 퍼덕이는 한 쌍, 꼬리는 살랑임). */
     static Attachment attachment(Category category, ConfigurationSection s) {
-        Attachment def = Attachment.defaults(category);
+        Attachment def = Attachment.slot(category).defaults();
         // offset-y 는 예전 설정과 맞추려고 남겨 둔 줄임말
-        double offsetY = Math.max(-5, Math.min(5, s.getDouble("offset-y", 0)));
+        double offsetY = Math.clamp(s.getDouble("offset-y", 0), -5, 5);
         Attachment.Vec3 offset = vec3(s, "offset", def.offset(), 5).plus(new Attachment.Vec3(0, offsetY, 0));
-        Motion motion = s.contains("animation") ? enumValue(Motion.class, s, "animation", "NONE") : def.motion();
         return new Attachment(offset, vec3(s, "rotation", def.rotation(), 360), vec3(s, "pivot", def.pivot(), 5),
-                s.getBoolean("mirror", def.mirror()), motion,
-                Math.max(0, Math.min(10, s.getDouble("animation-speed", def.speed()))),
-                Math.max(0, Math.min(180, s.getDouble("animation-angle", def.angle()))),
-                Math.max(-90, Math.min(90, s.getDouble("spread", def.spread()))),
-                Math.max(0, Math.min(2, s.getDouble("animation-height", def.height()))));
+                s.getBoolean("mirror", def.mirror()), enumValue(Motion.class, s, "animation", def.motion().name()),
+                Math.clamp(s.getDouble("animation-speed", def.speed()), 0, 10),
+                Math.clamp(s.getDouble("animation-angle", def.angle()), 0, 180),
+                Math.clamp(s.getDouble("spread", def.spread()), -90, 90),
+                Math.clamp(s.getDouble("animation-height", def.height()), 0, 2));
     }
 
     /** {@code [x, y, z]} 세 숫자 (각각 절댓값 {@code max} 이하). */

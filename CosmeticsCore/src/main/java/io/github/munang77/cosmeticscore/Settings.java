@@ -90,14 +90,14 @@ public final class Settings {
             crateBroadcast.add(r.toLowerCase(Locale.ROOT));
         }
         wardrobeEnabled = c.getBoolean("wardrobe.enabled", true);
-        wardrobeDistance = Math.max(2.0, Math.min(5.0, c.getDouble("wardrobe.distance", 2.8)));
+        wardrobeDistance = Math.clamp(c.getDouble("wardrobe.distance", 2.8), 2.0, 5.0);
         wardrobeMaxSeconds = Math.max(0, c.getInt("wardrobe.max-seconds", 300));
         packSend = c.getBoolean("resource-pack.send", false);
         packRequired = c.getBoolean("resource-pack.required", false);
         packPrompt = c.getString("resource-pack.prompt", "");
         packUrl = c.getString("resource-pack.url", "").trim();
         packSelfHost = c.getBoolean("resource-pack.self-host.enabled", true);
-        packPort = Math.max(1, Math.min(65535, c.getInt("resource-pack.self-host.port", 8163)));
+        packPort = Math.clamp(c.getInt("resource-pack.self-host.port", 8163), 1, 65535);
         packAddress = c.getString("resource-pack.self-host.address", "").trim();
         rarities = readRarities(c.getConfigurationSection("rarities"), log);
         showLocked = c.getBoolean("menu.show-locked", true);

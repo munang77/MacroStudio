@@ -24,6 +24,8 @@ final class BodyMath {
     /** 웅크렸을 때 몸통이 앞으로 숙는 각도 (라디안, 바닐라 모델과 같다). */
     static final double SNEAK_LEAN = 0.5;
     static final float SNEAK_LEAN_DEGREES = (float) Math.toDegrees(SNEAK_LEAN);
+    private static final double LEAN_COS = Math.cos(SNEAK_LEAN);
+    private static final double LEAN_SIN = Math.sin(SNEAK_LEAN);
     /** 움직임 빠르기 1 일 때 한 틱에 도는 위상 (약 1.6초에 한 번). */
     static final double BASE_STEP = 0.2;
     /** 걷는 중이면 이만큼 빨리 움직인다. */
@@ -32,16 +34,9 @@ final class BodyMath {
     private BodyMath() {
     }
 
-    /** 카테고리의 기본 자리 (서 있을 때, 발 기준 오른쪽/위/앞). */
+    /** 카테고리의 기본 자리 (서 있을 때, 발 기준 오른쪽/위/앞). 몸 장식 카테고리만. */
     static Vec3 anchor(Category category) {
-        return switch (category) {
-            case BACKPACK -> new Vec3(0, 1.1, -0.28);
-            case WINGS -> new Vec3(0, 1.25, -0.2);
-            case TAIL -> new Vec3(0, 0.72, -0.16);
-            case WAIST -> new Vec3(0, 0.78, 0);
-            case TORSO -> new Vec3(0, 1.2, 0.15);
-            default -> Vec3.ZERO;
-        };
+        return Attachment.slot(category).anchor();
     }
 
     /** 거울 조각이면 좌우를 뒤집는다. */
@@ -55,9 +50,7 @@ final class BodyMath {
             return p;
         }
         double up = p.y() - NECK;
-        double c = Math.cos(SNEAK_LEAN);
-        double s = Math.sin(SNEAK_LEAN);
-        return new Vec3(p.x(), SNEAK_NECK - p.z() * s + up * c, p.z() * c + up * s);
+        return new Vec3(p.x(), SNEAK_NECK - p.z() * LEAN_SIN + up * LEAN_COS, p.z() * LEAN_COS + up * LEAN_SIN);
     }
 
     /** 이번 틱에 위상이 얼마나 나아가는지. */
@@ -77,9 +70,8 @@ final class BodyMath {
         float ry = (float) Math.toRadians(r.y());
         float rz = (float) Math.toRadians(r.z());
         // 왼쪽 조각 = 오른쪽 조각을 좌우로 비춘 것. 비추면 x축 회전은 그대로, y·z축 회전은 반대가 된다
-        Quaternionf turn = side < 0
-                ? motion(a, side, phase).mul(new Quaternionf().rotationXYZ(rx, -ry, -rz))
-                : motion(a, side, phase).mul(new Quaternionf().rotationXYZ(rx, ry, rz));
+        float m = side < 0 ? -1 : 1;
+        Quaternionf turn = motion(a, side, phase).mul(new Quaternionf().rotationXYZ(rx, m * ry, m * rz));
 
         // 중심점은 제자리에 두고 그 둘레로 돌린다: 옮김 = p - R·p (중심점이 모델 가운데면 0).
         // 설정의 오른쪽(+x)은 엔티티 안쪽 좌표의 -x, 왼쪽 조각은 거울이라 다시 +x. 크기를 바꿔도 같은 곳을 잡도록 크기를 곱한다
@@ -94,9 +86,14 @@ final class BodyMath {
         return new Transformation(translation, rotation, new Vector3f(scale, scale, scale), new Quaternionf());
     }
 
+    /** 돌리지 않고 크기만 바꾼 변환. */
+    static Transformation scaled(float scale) {
+        return new Transformation(new Vector3f(), new Quaternionf(), new Vector3f(scale, scale, scale), new Quaternionf());
+    }
+
     /** 보이지 않게 크기를 0 으로. */
     static Transformation hidden() {
-        return new Transformation(new Vector3f(), new Quaternionf(), new Vector3f(), new Quaternionf());
+        return scaled(0);
     }
 
     private static Quaternionf motion(Attachment a, int side, double phase) {

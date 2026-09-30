@@ -55,30 +55,43 @@ public final class ResourcePackService implements Listener {
     private volatile byte[] sha1;
     private String url;
     private HttpServer server;
+    private int serverPort;
     private ExecutorService executor;
+    /** 플러그인에 들어 있는 리소스팩 파일 (플러그인이 켜져 있는 동안 바뀌지 않으므로 한 번만 읽는다). */
+    private Map<String, byte[]> bundled;
+    /** 지난번에 합친 extra 폴더의 모습 (같으면 zip 을 다시 만들지 않는다). */
+    private String builtFrom;
 
     public ResourcePackService(CosmeticsCore plugin) {
         this.plugin = plugin;
     }
 
-    /** 리소스팩을 (다시) 만들고, 보낼 주소를 정한다. */
+    /**
+     * 리소스팩을 (바뀌었으면 다시) 만들고, 보낼 주소를 정한다. 켤 때와 리로드할 때 부른다. 웹 서버는 포트가 그대로면
+     * 계속 돌려서 받는 중인 플레이어가 끊기지 않게 한다.
+     */
     public void start() {
-        stop();
         // 만들다 실패하면 예전 주소로 보내지 않게 먼저 비운다
         url = null;
         try {
             build();
         } catch (IOException e) {
             plugin.getLogger().log(Level.SEVERE, "리소스팩을 만들지 못했습니다.", e);
+            stop();
             return;
         }
         Settings settings = plugin.settings();
+        String address = settings.packAddress().isEmpty() ? Bukkit.getIp() : settings.packAddress();
+        boolean selfHost = settings.packSend() && settings.packUrl().isEmpty() && settings.packSelfHost()
+                && address != null && !address.isBlank();
+        if (!selfHost) {
+            stop();
+        }
         if (!settings.packSend()) {
             return;
         }
-        String custom = settings.packUrl();
-        if (!custom.isEmpty()) {
-            url = custom;
+        if (!settings.packUrl().isEmpty()) {
+            url = settings.packUrl();
             plugin.getLogger().info("리소스팩을 " + url + " 에서 받게 합니다 (해시 " + hash() + ")");
             return;
         }
@@ -86,8 +99,7 @@ public final class ResourcePackService implements Listener {
             plugin.getLogger().warning("resource-pack.url 이 비어 있고 self-host 도 꺼져 있어 리소스팩을 보내지 않습니다.");
             return;
         }
-        String address = settings.packAddress().isEmpty() ? Bukkit.getIp() : settings.packAddress();
-        if (address == null || address.isBlank()) {
+        if (!selfHost) {
             plugin.getLogger().warning("리소스팩을 직접 보내려면 config.yml 의 resource-pack.self-host.address 에 "
                     + "플레이어가 접속하는 서버 주소(공인 IP 나 도메인)를 적어 주세요.");
             return;
@@ -107,6 +119,7 @@ public final class ResourcePackService implements Listener {
         if (server != null) {
             server.stop(0);
             server = null;
+            serverPort = 0;
         }
         if (executor != null) {
             executor.shutdownNow();
@@ -138,25 +151,35 @@ public final class ResourcePackService implements Listener {
 
     // ── 만들기 ───────────────────────────────────
 
-    /** 들어 있는 모델 + extra 폴더를 합쳐 zip 을 쓴다 (같은 경로면 extra 가 이긴다). */
-    private void build() throws IOException {
-        Map<String, byte[]> files = new TreeMap<>();
-        try (InputStream index = plugin.getResource("pack/index.txt")) {
-            if (index == null) {
-                throw new IOException("플러그인에 pack/index.txt 가 없습니다");
-            }
-            List<String> paths = new String(index.readAllBytes(), StandardCharsets.UTF_8).lines()
-                    .map(String::trim).filter(s -> !s.isEmpty()).toList();
-            for (String path : paths) {
-                try (InputStream in = plugin.getResource("pack/" + path)) {
-                    if (in != null) {
-                        files.put(path, in.readAllBytes());
+    /** 플러그인에 들어 있는 리소스팩 파일들 (한 번만 읽는다). */
+    private Map<String, byte[]> bundled() throws IOException {
+        if (bundled == null) {
+            Map<String, byte[]> files = new TreeMap<>();
+            try (InputStream index = plugin.getResource("pack/index.txt")) {
+                if (index == null) {
+                    throw new IOException("플러그인에 pack/index.txt 가 없습니다");
+                }
+                List<String> paths = new String(index.readAllBytes(), StandardCharsets.UTF_8).lines()
+                        .map(String::trim).filter(s -> !s.isEmpty()).toList();
+                for (String path : paths) {
+                    try (InputStream in = plugin.getResource("pack/" + path)) {
+                        if (in != null) {
+                            files.put(path, in.readAllBytes());
+                        }
                     }
                 }
             }
+            bundled = files;
         }
-        Path folder = plugin.getDataFolder().toPath().resolve("resourcepack");
-        Path extra = folder.resolve("extra");
+        return bundled;
+    }
+
+    /**
+     * 들어 있는 모델 + extra 폴더를 합쳐 zip 을 쓴다 (같은 경로면 extra 가 이긴다). extra 폴더가 지난번과 같고 zip 이
+     * 그대로 있으면 다시 만들지 않는다 (zip 은 늘 같은 순서·시각으로 만들어서 내용이 같으면 해시도 같다).
+     */
+    private void build() throws IOException {
+        Path extra = file().resolveSibling("extra");
         Files.createDirectories(extra);
         Path readme = extra.resolve("README.txt");
         if (Files.notExists(readme)) {
@@ -166,14 +189,21 @@ public final class ResourcePackService implements Listener {
                     같은 경로의 파일이 있으면 이 폴더의 것이 이깁니다.
                     """, StandardCharsets.UTF_8);
         }
+        List<Path> extras;
         try (Stream<Path> walk = Files.walk(extra)) {
-            for (Path p : (Iterable<Path>) walk.filter(Files::isRegularFile)::iterator) {
-                if (p.equals(readme)) {
-                    continue;
-                }
-                String rel = extra.relativize(p).toString().replace('\\', '/');
-                files.put(rel, Files.readAllBytes(p));
-            }
+            extras = walk.filter(Files::isRegularFile).filter(p -> !p.equals(readme)).sorted().toList();
+        }
+        StringBuilder fingerprint = new StringBuilder();
+        for (Path p : extras) {
+            fingerprint.append(p).append('|').append(Files.size(p)).append('|')
+                    .append(Files.getLastModifiedTime(p).toMillis()).append('\n');
+        }
+        if (fingerprint.toString().equals(builtFrom) && zip != null && Files.exists(file())) {
+            return;
+        }
+        Map<String, byte[]> files = new TreeMap<>(bundled());
+        for (Path p : extras) {
+            files.put(extra.relativize(p).toString().replace('\\', '/'), Files.readAllBytes(p));
         }
 
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -193,15 +223,20 @@ public final class ResourcePackService implements Listener {
             throw new IOException(e);
         }
         zip = data;
-        Files.write(folder.resolve(ZIP_NAME), data);
+        Files.write(file(), data);
+        builtFrom = fingerprint.toString();
         plugin.getLogger().info("리소스팩을 만들었습니다: plugins/" + plugin.getName() + "/resourcepack/" + ZIP_NAME
                 + " (" + files.size() + "개 파일, " + data.length / 1024 + "KB)");
     }
 
     // ── 직접 보내기 ──────────────────────────────
 
-    /** 리소스팩 파일 하나만 내어 주는 웹 서버. */
+    /** 리소스팩 파일 하나만 내어 주는 웹 서버 (같은 포트로 이미 돌고 있으면 그대로 쓴다). */
     private void host(int port) throws IOException {
+        if (server != null && serverPort == port) {
+            return;
+        }
+        stop();
         HttpServer http = HttpServer.create(new InetSocketAddress(port), 16);
         executor = Executors.newFixedThreadPool(2, r -> {
             Thread t = new Thread(r, "CosmeticsCore-ResourcePack");
@@ -212,6 +247,7 @@ public final class ResourcePackService implements Listener {
         http.createContext("/", this::serve);
         http.start();
         server = http;
+        serverPort = port;
     }
 
     private void serve(HttpExchange exchange) throws IOException {

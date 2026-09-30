@@ -48,7 +48,7 @@ class BodyMathTest {
 
     @Test
     void flapFoldsBothWingsBackward() {
-        Attachment a = Attachment.defaults(Category.WINGS);
+        Attachment a = Attachment.slot(Category.WINGS).defaults();
         // 오른쪽 날개 끝 = 모델 동쪽(+x) → 엔티티 안쪽 -x. 뒤로 접히면 z 가 음수가 된다
         Vector3f tipRight = place(BodyMath.transform(a, 1, 1, Math.PI / 2), new Vector3f(1, 0, 0));
         Vector3f tipLeft = place(BodyMath.transform(a, 1, -1, Math.PI / 2), new Vector3f(1, 0, 0));

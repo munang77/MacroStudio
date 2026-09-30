@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Locale;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 
 import io.github.munang77.cosmeticscore.chat.ChatService;
@@ -168,7 +169,7 @@ public class CosmeticsCore extends JavaPlugin {
         effects.start();
         pack.start();
         // 열린 옷장은 예전 코스메틱 목록을 들고 있으므로 닫는다 (옷장 자리로 옮겨 간 사람은 돌려보냄)
-        wardrobe.start();
+        wardrobe.closeAll();
         for (Player player : getServer().getOnlinePlayers()) {
             manager.resync(player);
         }
@@ -208,27 +209,43 @@ public class CosmeticsCore extends JavaPlugin {
         if (version >= CONFIG_VERSION) {
             return;
         }
-        File file = new File(getDataFolder(), "config.yml");
-        YamlConfiguration disk = YamlConfiguration.loadConfiguration(file);
-        for (Category category : Category.values()) {
-            String path = "menu.categories." + category.key();
-            disk.set(path + ".slot", category.defaultSlot());
-            if (!disk.contains(path + ".icon")) {
-                disk.set(path + ".icon", category.defaultIcon().name());
+        boolean saved = editConfigFile(disk -> {
+            for (Category category : Category.values()) {
+                String path = "menu.categories." + category.key();
+                disk.set(path + ".slot", category.defaultSlot());
+                if (!disk.contains(path + ".icon")) {
+                    disk.set(path + ".icon", category.defaultIcon().name());
+                }
             }
-        }
-        disk.set("config-version", CONFIG_VERSION);
-        if (getConfig().getDefaults() != null) {
-            disk.setDefaults(getConfig().getDefaults());
-            disk.options().copyDefaults(true);
-        }
-        try {
-            disk.save(file);
+            disk.set("config-version", CONFIG_VERSION);
+            if (getConfig().getDefaults() != null) {
+                disk.setDefaults(getConfig().getDefaults());
+                disk.options().copyDefaults(true);
+            }
+        });
+        if (saved) {
             getLogger().info("config.yml 을 새 형식(" + CONFIG_VERSION + ")으로 바꿨습니다: 메뉴 칸 배치와 옷장·리소스팩 설정");
-        } catch (IOException e) {
-            getLogger().log(Level.WARNING, "config.yml 을 새 형식으로 저장하지 못했습니다.", e);
         }
         reloadConfig();
+    }
+
+    /**
+     * 디스크의 config.yml 을 다시 읽어 고친 뒤 저장한다 (주석은 그대로). {@code saveConfig()} 는 메모리의 설정 전체를
+     * 덮어써서 관리자가 고치고 아직 리로드하지 않은 내용이 사라지므로, 플러그인이 설정을 바꿀 때는 이것을 쓴다.
+     *
+     * @return 저장했으면 {@code true}
+     */
+    public boolean editConfigFile(Consumer<YamlConfiguration> edit) {
+        File file = new File(getDataFolder(), "config.yml");
+        YamlConfiguration disk = YamlConfiguration.loadConfiguration(file);
+        edit.accept(disk);
+        try {
+            disk.save(file);
+            return true;
+        } catch (IOException e) {
+            getLogger().log(Level.WARNING, "config.yml 을 저장하지 못했습니다.", e);
+            return false;
+        }
     }
 
     private Storage createStorage() {

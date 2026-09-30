@@ -30,12 +30,37 @@ public record Attachment(Vec3 offset, Vec3 rotation, Vec3 pivot, boolean mirror,
     public static final Attachment NONE = new Attachment(Vec3.ZERO, Vec3.ZERO, Vec3.ZERO, false,
             Motion.NONE, 1, 0, 0, 0.06);
 
-    /** 카테고리마다 따로 적지 않았을 때 쓰는 움직임과 거울 여부. */
-    public static Attachment defaults(Category category) {
+    /**
+     * 디스플레이 카테고리의 기본값.
+     *
+     * @param anchor   서 있을 때 붙는 자리 (발 기준 오른쪽/위/앞, 칸). 풍선·펫은 따라다니므로 쓰지 않는다
+     * @param scale    크기
+     * @param defaults 따로 적지 않았을 때의 움직임과 거울 여부
+     */
+    public record Slot(Vec3 anchor, float scale, Attachment defaults) {
+    }
+
+    private static final Attachment FLAPPING_PAIR = new Attachment(Vec3.ZERO, Vec3.ZERO, Vec3.ZERO, true,
+            Motion.FLAP, 1, 16, 20, 0.06);
+    private static final Attachment SWAYING = new Attachment(Vec3.ZERO, Vec3.ZERO, Vec3.ZERO, false,
+            Motion.SWAY, 1, 14, 0, 0.06);
+
+    /**
+     * 카테고리별 기본값을 한곳에 모은 표. 모든 카테고리를 적어 두어서, 새 카테고리를 만들고 여기를 빠뜨리면
+     * 컴파일이 안 된다.
+     *
+     * @return 몸에 붙거나 떠다니는 장식이 아니면 {@code null}
+     */
+    public static Slot slot(Category category) {
         return switch (category) {
-            case WINGS -> new Attachment(Vec3.ZERO, Vec3.ZERO, Vec3.ZERO, true, Motion.FLAP, 1, 16, 20, 0.06);
-            case TAIL -> new Attachment(Vec3.ZERO, Vec3.ZERO, Vec3.ZERO, false, Motion.SWAY, 1, 14, 0, 0.06);
-            default -> NONE;
+            case BACKPACK -> new Slot(new Vec3(0, 1.1, -0.28), 0.6f, NONE);
+            case WINGS -> new Slot(new Vec3(0, 1.25, -0.2), 1.0f, FLAPPING_PAIR);
+            case TAIL -> new Slot(new Vec3(0, 0.72, -0.16), 1.0f, SWAYING);
+            case WAIST -> new Slot(new Vec3(0, 0.78, 0), 1.0f, NONE);
+            case TORSO -> new Slot(new Vec3(0, 1.2, 0.15), 1.0f, NONE);
+            case BALLOON -> new Slot(Vec3.ZERO, 0.7f, NONE);
+            case PET -> new Slot(Vec3.ZERO, 0.5f, NONE);
+            case HAT, PARTICLE, ARROW_TRAIL, KILL_EFFECT, KILL_MESSAGE, TITLE, CHAT_COLOR, JOIN_EFFECT -> null;
         };
     }
 }

@@ -8,6 +8,8 @@ import java.util.List;
 
 import io.github.munang77.cosmeticscore.cosmetic.Category;
 import io.github.munang77.cosmeticscore.util.Text;
+import net.md_5.bungee.api.ChatMessageType;
+import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -52,6 +54,19 @@ public final class Messages {
     public void broadcast(String path, String... pairs) {
         for (Player player : Bukkit.getOnlinePlayers()) {
             send(player, path, pairs);
+        }
+    }
+
+    /** 액션바(핫바 위 글자)로 보낸다. 문구를 비워 두면 보내지 않는다. */
+    public void actionBar(Player to, String path, String... pairs) {
+        String text = get(path, pairs);
+        if (text.isEmpty()) {
+            return;
+        }
+        try {
+            to.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(text));
+        } catch (RuntimeException ignored) {
+            // 액션바를 못 보내는 서버 구현이면 넘어간다
         }
     }
 

@@ -413,12 +413,7 @@ public final class CosmeticsCommand implements TabExecutor {
                     yield filter(options, args[1]);
                 }
                 case WARDROBE -> {
-                    List<String> options = new ArrayList<>();
-                    for (Category category : Category.values()) {
-                        if (category.isWardrobe()) {
-                            options.add(plugin.messages().category(category).replace(" ", ""));
-                        }
-                    }
+                    List<String> options = categoryWords(false, Category::isWardrobe);
                     if (admin) {
                         options.addAll(SET_WORDS);
                         options.addAll(CLEAR_WORDS);
@@ -441,8 +436,15 @@ public final class CosmeticsCommand implements TabExecutor {
 
     /** 카테고리 한글 이름 (띄어쓰기 없이), 필요하면 영문 키도. */
     private List<String> categoryWords(boolean withKeys) {
+        return categoryWords(withKeys, c -> true);
+    }
+
+    private List<String> categoryWords(boolean withKeys, Predicate<Category> which) {
         List<String> words = new ArrayList<>();
         for (Category category : Category.values()) {
+            if (!which.test(category)) {
+                continue;
+            }
             words.add(plugin.messages().category(category).replace(" ", ""));
             if (withKeys) {
                 words.add(category.key());

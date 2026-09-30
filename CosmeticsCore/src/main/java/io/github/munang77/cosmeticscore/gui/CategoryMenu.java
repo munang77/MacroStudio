@@ -6,6 +6,7 @@ import java.util.List;
 import io.github.munang77.cosmeticscore.CosmeticManager;
 import io.github.munang77.cosmeticscore.CosmeticsCore;
 import io.github.munang77.cosmeticscore.Messages;
+import io.github.munang77.cosmeticscore.PurchaseConfirm;
 import io.github.munang77.cosmeticscore.cosmetic.Category;
 import io.github.munang77.cosmeticscore.cosmetic.Cosmetic;
 import io.github.munang77.cosmeticscore.util.ItemBuilder;
@@ -35,8 +36,7 @@ public final class CategoryMenu extends Menu {
     private final List<Cosmetic> entries;
     private final int page;
     private final int pages;
-    private String pendingPurchase;
-    private long pendingSince;
+    private final PurchaseConfirm confirm = new PurchaseConfirm();
 
     public CategoryMenu(CosmeticsCore plugin, Player viewer, Category category, int page) {
         this(plugin, viewer, category, visible(plugin, viewer, category), page);
@@ -87,7 +87,7 @@ public final class CategoryMenu extends Menu {
         int start = page * CONTENT.length;
         for (int i = 0; i < CONTENT.length && start + i < entries.size(); i++) {
             Cosmetic cosmetic = entries.get(start + i);
-            inventory.setItem(CONTENT[i], icon(cosmetic, manager.owns(viewer, cosmetic), manager.isEquipped(viewer, cosmetic)));
+            inventory.setItem(CONTENT[i], icon(cosmetic, manager.status(viewer, cosmetic)));
         }
 
         inventory.setItem(BACK, new ItemBuilder(Material.ARROW).name(msg.get("menu.back")).build());
@@ -106,8 +106,10 @@ public final class CategoryMenu extends Menu {
         fill();
     }
 
-    private ItemStack icon(Cosmetic cosmetic, boolean owned, boolean equipped) {
+    private ItemStack icon(Cosmetic cosmetic, CosmeticManager.Status status) {
         Messages msg = plugin.messages();
+        boolean equipped = status == CosmeticManager.Status.EQUIPPED;
+        boolean owned = equipped || status == CosmeticManager.Status.OWNED;
         Material lockedIcon = plugin.settings().lockedIcon();
         ItemBuilder builder = !owned && lockedIcon != null
                 ? new ItemBuilder(lockedIcon)
@@ -115,11 +117,15 @@ public final class CategoryMenu extends Menu {
         List<String> lore = new ArrayList<>(cosmetic.lore());
         lore.add("");
         lore.add(rarityLine(cosmetic));
-        if (!owned && cosmetic.price() > 0) {
+        if (status == CosmeticManager.Status.BUYABLE) {
             lore.add(msg.get("menu.item.price", "price", plugin.economy().format(cosmetic.price())));
         }
-        lore.addAll(msg.list(equipped ? "menu.item.equipped" : owned ? "menu.item.available"
-                : cosmetic.price() > 0 ? "menu.item.buy" : "menu.item.locked"));
+        lore.addAll(msg.list(switch (status) {
+            case EQUIPPED -> "menu.item.equipped";
+            case OWNED -> "menu.item.available";
+            case BUYABLE -> "menu.item.buy";
+            case LOCKED -> "menu.item.locked";
+        }));
         lore.addAll(msg.list("menu.item.preview"));
         return builder.name(cosmetic.name()).lore(lore).glow(equipped).hideTooltipExtras().build();
     }
@@ -183,17 +189,10 @@ public final class CategoryMenu extends Menu {
                 sound("block.note_block.bass", 0.6f);
                 return;
             }
-            // 실수로 사지 않도록 5초 안에 한 번 더 눌러야 산다
-            long now = System.currentTimeMillis();
-            if (!cosmetic.id().equals(pendingPurchase) || now - pendingSince > 5000) {
-                pendingPurchase = cosmetic.id();
-                pendingSince = now;
-                plugin.messages().send(viewer, "confirm-purchase", "name", cosmetic.name(),
-                        "price", plugin.economy().format(cosmetic.price()));
+            if (!confirm.confirm(plugin, viewer, cosmetic, "confirm-purchase")) {
                 sound("block.note_block.pling", 1.2f);
                 return;
             }
-            pendingPurchase = null;
             if (manager.purchase(viewer, cosmetic)) {
                 sound("entity.player.levelup", 1.2f);
             } else {

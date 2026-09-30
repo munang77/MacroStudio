@@ -5,6 +5,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import io.github.munang77.cosmeticscore.CosmeticsCore;
 import io.github.munang77.cosmeticscore.cosmetic.ArrowTrailCosmetic;
@@ -93,21 +94,29 @@ public final class EffectService implements Listener {
                 continue;
             }
             boolean moving = last != null && last.getWorld() == loc.getWorld() && last.distanceSquared(loc) > 0.0004;
-            ParticleSpec spec = cosmetic.spec();
-            int step = particleStep;
-            // 보는 사람은 찍을 점이 처음 나왔을 때 한 번만 구한다 (멈춰 선 발자국처럼 점이 없으면 찾지 않는다)
-            var viewers = new Object() {
-                List<Player> list;
-            };
-            cosmetic.style().render(loc, loc.getYaw(), step, moving, player.isSneaking(), point -> {
-                if (viewers.list == null) {
-                    viewers.list = plugin.manager().viewers(player, loc);
-                }
-                for (Player viewer : viewers.list) {
-                    spec.spawn(viewer, point, 1, 0, 0, step);
-                }
-            });
+            drawParticles(cosmetic, loc, loc.getYaw(), particleStep, moving, player.isSneaking(),
+                    () -> plugin.manager().viewers(player, loc));
         }
+    }
+
+    /**
+     * 파티클 코스메틱을 한 번 그린다. 실제 플레이어와 옷장 마네킹이 똑같이 보이도록 같이 쓴다.
+     * 보는 사람은 찍을 점이 처음 나왔을 때 한 번만 구한다 (멈춰 선 발자국처럼 점이 없으면 찾지 않는다).
+     */
+    public void drawParticles(ParticleCosmetic cosmetic, Location at, float yaw, int step, boolean moving,
+                              boolean sneaking, Supplier<List<Player>> viewers) {
+        ParticleSpec spec = cosmetic.spec();
+        var found = new Object() {
+            List<Player> list;
+        };
+        cosmetic.style().render(at, yaw, step, moving, sneaking, point -> {
+            if (found.list == null) {
+                found.list = viewers.get();
+            }
+            for (Player viewer : found.list) {
+                spec.spawn(viewer, point, 1, 0, 0, step);
+            }
+        });
     }
 
     // ── 화살 궤적 ────────────────────────────────

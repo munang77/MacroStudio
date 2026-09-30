@@ -48,7 +48,8 @@ public final class ChatService implements Listener {
         return prefixOf(title(player));
     }
 
-    private static String prefixOf(String title) {
+    /** 칭호 뒤에 색을 끊고 한 칸 띄운 접두사 (옷장 마네킹 이름표도 같은 모양). */
+    public static String prefixOf(String title) {
         return title.isEmpty() ? "" : title + ChatColor.RESET + " ";
     }
 

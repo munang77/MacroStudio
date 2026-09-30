@@ -1,14 +1,12 @@
 package io.github.munang77.cosmeticscore.wardrobe;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import java.util.logging.Level;
+import java.util.function.Consumer;
 
 import io.github.munang77.cosmeticscore.CosmeticsCore;
 import io.github.munang77.cosmeticscore.Messages;
@@ -16,15 +14,13 @@ import io.github.munang77.cosmeticscore.Settings;
 import io.github.munang77.cosmeticscore.cosmetic.Category;
 import io.github.munang77.cosmeticscore.util.Facing;
 import io.github.munang77.cosmeticscore.util.Visibility;
-import net.md_5.bungee.api.ChatMessageType;
-import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.Block;
-import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Interaction;
 import org.bukkit.entity.LivingEntity;
@@ -87,6 +83,11 @@ public final class WardrobeService implements Listener {
             task.cancel();
             task = null;
         }
+        closeAll();
+    }
+
+    /** 열린 옷장을 모두 닫는다 (옷장 자리로 옮겨 간 사람은 돌려보냄). 리로드하면 예전 코스메틱을 붙잡지 않게 부른다. */
+    public void closeAll() {
         for (WardrobeSession session : new ArrayList<>(sessions.values())) {
             end(session, true, null);
         }
@@ -181,9 +182,8 @@ public final class WardrobeService implements Listener {
         }
 
         LivingEntity mannequin;
-        boolean[] hidden = {true};
         try {
-            mannequin = Mannequins.spawn(stage, player, plugin.getLogger(), m -> hidden[0] = prepareMannequin(m));
+            mannequin = Mannequins.spawn(stage, player, plugin.getLogger(), this::prepareMannequin);
         } catch (RuntimeException e) {
             plugin.getLogger().warning("옷장 마네킹을 만들지 못했습니다: " + e);
             mannequin = null;
@@ -192,16 +192,13 @@ public final class WardrobeService implements Listener {
             msg.send(player, "wardrobe.failed");
             return false;
         }
-        reveal(player, mannequin, hidden[0]);
+        Visibility.revealOnlyTo(plugin, player, mannequin);
         WardrobeSession session = new WardrobeSession(plugin, player, mannequin, view, origin, categories,
                 start, tick);
         sessions.put(player.getUniqueId(), session);
         buildButtons(session, stage);
         if (origin != null) {
-            session.teleporting = true;
-            boolean moved = player.teleport(view);
-            session.teleporting = false;
-            if (!moved) {
+            if (!player.teleport(view)) {
                 // 다른 플러그인(지역 보호, 전투 중 등)이 옮기지 못하게 했다
                 end(session, false, "wardrobe.failed");
                 return false;
@@ -234,15 +231,12 @@ public final class WardrobeService implements Listener {
             return;
         }
         plugin.displays().detach(session.mannequin.getUniqueId());
-        for (Entity entity : session.entities()) {
-            entity.remove();
-        }
+        session.removeEntities();
         if (session.origin != null) {
             showOthers(session);
+            // 세션을 먼저 지웠으므로 이 순간이동은 onTeleport 가 무시한다
             if (restore && player.isOnline()) {
-                session.teleporting = true;
                 player.teleport(session.origin);
-                session.teleporting = false;
             }
         }
         if (message != null && player.isOnline()) {
@@ -254,7 +248,7 @@ public final class WardrobeService implements Listener {
     // ── 옷장 자리 ────────────────────────────────
 
     /** 관리자가 정한 옷장 자리 (없거나 월드가 없으면 {@code null}). 형식: {@code 월드,x,y,z,yaw,pitch} */
-    public Location fixedLocation() {
+    private Location fixedLocation() {
         String raw = plugin.getConfig().getString(LOCATION_PATH, "");
         if (raw == null || raw.isBlank()) {
             return null;
@@ -282,19 +276,12 @@ public final class WardrobeService implements Listener {
     public void setFixedLocation(Location at) {
         String value = "";
         if (at != null) {
-            value = String.format(Locale.ROOT, "%s,%.3f,%.3f,%.3f,%.1f,%.1f", at.getWorld().getName(),
-                    at.getX(), at.getY(), at.getZ(), at.getYaw(), 0f);
+            // 옷장에서는 정면을 보게 한다 (위아래 각도는 0)
+            value = String.format(Locale.ROOT, "%s,%.3f,%.3f,%.3f,%.1f,0.0", at.getWorld().getName(),
+                    at.getX(), at.getY(), at.getZ(), at.getYaw());
         }
-        // saveConfig() 는 메모리의 설정 전체를 덮어써서, 관리자가 고치고 아직 리로드하지 않은 내용이 사라진다.
-        // 그래서 파일을 다시 읽어 이 값만 바꿔 쓴다 (주석은 그대로)
-        File file = new File(plugin.getDataFolder(), "config.yml");
-        YamlConfiguration disk = YamlConfiguration.loadConfiguration(file);
-        disk.set(LOCATION_PATH, value);
-        try {
-            disk.save(file);
-        } catch (IOException e) {
-            plugin.getLogger().log(Level.WARNING, "config.yml 에 옷장 자리를 저장하지 못했습니다.", e);
-        }
+        String saved = value;
+        plugin.editConfigFile(disk -> disk.set(LOCATION_PATH, saved));
         plugin.getConfig().set(LOCATION_PATH, value);
     }
 
@@ -324,19 +311,30 @@ public final class WardrobeService implements Listener {
 
     // ── 만들기 ───────────────────────────────────
 
-    /** @return 기본으로 숨기지 못했으면 {@code false} */
-    private boolean prepareMannequin(LivingEntity mannequin) {
+    private void prepareMannequin(LivingEntity mannequin) {
+        mannequin.getPersistentDataContainer().set(key, PersistentDataType.BYTE, (byte) 1);
         mannequin.setPersistent(false);
         mannequin.setInvulnerable(true);
         mannequin.setSilent(true);
         mannequin.setGravity(false);
         mannequin.setCollidable(false);
-        mannequin.getPersistentDataContainer().set(key, PersistentDataType.BYTE, (byte) 1);
-        return Visibility.hideByDefault(mannequin);
+        Visibility.hideByDefault(mannequin);
     }
 
-    private void reveal(Player owner, Entity entity, boolean hiddenByDefault) {
-        Visibility.revealOnlyTo(plugin, owner, entity, hiddenByDefault);
+    /**
+     * 옷장 주인에게만 보이는 엔티티를 소환한다. 표시를 먼저 붙여서 중간에 실패해도 다음에 켤 때 지울 수 있고,
+     * 소환하자마자 세션에 적어 둬서 닫을 때 모두 지운다.
+     */
+    private <T extends Entity> T spawnOwned(WardrobeSession session, Location at, Class<T> type, Consumer<T> setup) {
+        T entity = at.getWorld().spawn(at, type, e -> {
+            e.getPersistentDataContainer().set(key, PersistentDataType.BYTE, (byte) 1);
+            e.setPersistent(false);
+            Visibility.hideByDefault(e);
+            setup.accept(e);
+        });
+        session.spawned.add(entity);
+        Visibility.revealOnlyTo(plugin, session.player, entity);
+        return entity;
     }
 
     /** 마네킹 앞(플레이어 쪽)에 떠 있는 버튼들. 마네킹을 가리지 않게 양옆과 발치에 둔다. */
@@ -364,34 +362,23 @@ public final class WardrobeService implements Listener {
                         double side, double up, String text) {
         Location at = front.clone().add(right.clone().multiply(side)).add(0, up, 0);
         TextDisplay label = label(session, at, plugin.messages().get(text), 0.9f, true);
-        boolean[] hidden = {true};
-        Interaction hitbox = at.getWorld().spawn(at.clone().add(0, -0.05, 0), Interaction.class, i -> {
-            i.getPersistentDataContainer().set(key, PersistentDataType.BYTE, (byte) 1);
-            hidden[0] = WardrobeSession.prepare(i);
+        Interaction hitbox = spawnOwned(session, at.clone().add(0, -0.05, 0), Interaction.class, i -> {
             i.setInteractionWidth(0.7f);
             i.setInteractionHeight(0.4f);
             i.setResponsive(true);
         });
-        session.spawned.add(hitbox);
-        reveal(session.player, hitbox, hidden[0]);
         session.buttons.add(new WardrobeSession.Button(action, hitbox, label));
     }
 
     private TextDisplay label(WardrobeSession session, Location at, String text, float scale, boolean boxed) {
-        boolean[] hidden = {true};
-        TextDisplay label = at.getWorld().spawn(at, TextDisplay.class, t -> {
-            // 표시를 먼저 붙여서, 아래에서 실패해도 다음에 켤 때 지울 수 있게
-            t.getPersistentDataContainer().set(key, PersistentDataType.BYTE, (byte) 1);
-            hidden[0] = WardrobeSession.prepare(t);
+        return spawnOwned(session, at, TextDisplay.class, t -> {
+            t.setBillboard(Display.Billboard.CENTER);
             t.setText(text);
             t.setShadowed(true);
             t.setBackgroundColor(boxed ? Color.fromARGB(150, 20, 20, 30) : Color.fromARGB(0, 0, 0, 0));
             t.setTransformation(new Transformation(new Vector3f(), new Quaternionf(),
                     new Vector3f(scale, scale, scale), new Quaternionf()));
         });
-        session.spawned.add(label);
-        reveal(session.player, label, hidden[0]);
-        return label;
     }
 
     /** 정해진 옷장 자리에서는 같은 자리에 겹쳐 선 다른 사람을 서로 안 보이게 한다. */
@@ -405,8 +392,11 @@ public final class WardrobeService implements Listener {
     }
 
     private void showOthers(WardrobeSession session) {
+        if (!session.player.isOnline()) {
+            return;
+        }
         for (WardrobeSession other : sessions.values()) {
-            if (other != session && other.origin != null && session.player.isOnline()) {
+            if (other != session && other.origin != null) {
                 session.player.showPlayer(plugin, other.player);
                 other.player.showPlayer(plugin, session.player);
             }
@@ -432,16 +422,8 @@ public final class WardrobeService implements Listener {
             }
             session.tick(tick);
             if ((tick - session.openedAt) % 40 == 1) {
-                actionBar(session.player, plugin.messages().get("wardrobe.action-bar"));
+                plugin.messages().actionBar(session.player, "wardrobe.action-bar");
             }
-        }
-    }
-
-    private void actionBar(Player player, String text) {
-        try {
-            player.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(text));
-        } catch (RuntimeException ignored) {
-            // 액션바를 못 보내는 서버 구현이면 넘어간다
         }
     }
 
@@ -550,15 +532,13 @@ public final class WardrobeService implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTeleport(PlayerTeleportEvent event) {
         WardrobeSession session = sessions.get(event.getPlayer().getUniqueId());
-        if (session != null && !session.teleporting && !atView(session, event.getTo())) {
+        if (session != null && !atView(session, event.getTo())) {
             end(session, false, "wardrobe.closed");
         }
     }
 
     private static boolean atView(WardrobeSession session, Location to) {
-        Location view = session.view;
-        return to != null && to.getWorld() == view.getWorld() && Math.abs(to.getX() - view.getX()) < 0.01
-                && Math.abs(to.getY() - view.getY()) < 0.01 && Math.abs(to.getZ() - view.getZ()) < 0.01;
+        return to != null && to.getWorld() == session.view.getWorld() && to.distanceSquared(session.view) < 1e-4;
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

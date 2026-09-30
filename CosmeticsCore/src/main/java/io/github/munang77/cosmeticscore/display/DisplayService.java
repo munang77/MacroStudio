@@ -35,6 +35,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Transformation;
@@ -132,11 +133,6 @@ public final class DisplayService implements Listener {
         }
     }
 
-    /** 이 서비스가 만든 엔티티인지 (다른 기능이 건드리지 않게). */
-    public boolean isOurs(Entity entity) {
-        return entity.getPersistentDataContainer().has(key, PersistentDataType.BYTE);
-    }
-
     /** 착용 정보가 바뀌었을 때 바로 맞춘다. */
     public void refresh(Player player) {
         update(new PlayerHost(player, plugin.manager()));
@@ -150,10 +146,14 @@ public final class DisplayService implements Listener {
 
     public void detach(UUID id) {
         if (extraHosts.remove(id) != null) {
-            Rig rig = rigs.remove(id);
-            if (rig != null) {
-                rig.removeAll();
-            }
+            dropRig(id);
+        }
+    }
+
+    private void dropRig(UUID id) {
+        Rig rig = rigs.remove(id);
+        if (rig != null) {
+            rig.removeAll();
         }
     }
 
@@ -176,10 +176,7 @@ public final class DisplayService implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
         UUID id = event.getPlayer().getUniqueId();
-        Rig rig = rigs.remove(id);
-        if (rig != null) {
-            rig.removeAll();
-        }
+        dropRig(id);
         // 다시 들어오면 새 플레이어 객체라 숨김 상태가 풀린다 → 기록도 지운다
         for (Rig other : rigs.values()) {
             other.hiddenFrom.remove(id);
@@ -200,10 +197,7 @@ public final class DisplayService implements Listener {
             if (host.entity().isValid()) {
                 update(host);
             } else {
-                Rig rig = rigs.remove(host.id());
-                if (rig != null) {
-                    rig.removeAll();
-                }
+                dropRig(host.id());
                 hosts.remove();
             }
         }
@@ -263,6 +257,7 @@ public final class DisplayService implements Listener {
             Arrays.fill(wanted, null);
         }
         Entity body = host.entity();
+        Viewers viewers = null;
         for (int i = 0; i < PARTS.length; i++) {
             Category category = PARTS[i];
             DisplayCosmetic want = wanted[i];
@@ -304,7 +299,10 @@ public final class DisplayService implements Listener {
                     }
                 }
                 if (body instanceof Player owner) {
-                    sync(owner, rig, new Viewers(plugin.manager()));
+                    if (viewers == null) {
+                        viewers = new Viewers(plugin.manager());
+                    }
+                    sync(owner, rig, viewers);
                 }
             }
         }
@@ -330,37 +328,33 @@ public final class DisplayService implements Listener {
         part.world = world;
         Location start = body.getLocation();
         Player onlyFor = host.onlyFor();
-        // 본인에게만 보이는 장식인데 서버가 "기본으로 숨기기"를 못 하면 소환한 뒤 하나씩 숨긴다
-        boolean[] shownToAll = {false};
         try {
-            int pieces = cosmetic.mirrored() ? 2 : 1;
-            for (int i = 0; i < pieces; i++) {
-                int side = cosmetic.mirrored() ? (i == 0 ? 1 : -1) : 0;
+            for (int side : cosmetic.mirrored() ? new int[] {1, -1} : new int[] {0}) {
                 ItemDisplay display = world.spawn(start, ItemDisplay.class, d -> {
-                    shownToAll[0] |= !prepare(d, onlyFor);
+                    prepare(d, onlyFor);
                     d.setItemStack(cosmetic.itemAt(tick).create(plugin.getLogger()));
                     d.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.FIXED);
                     d.setTransformation(initial(cosmetic, side));
                 });
-                part.pieces.add(new Piece(display, side));
+                part.pieces.add(new Piece(display, side, cosmetic));
                 spawned.add(display);
             }
             if (cosmetic.stringBlock() != null) {
                 BlockDisplay line = world.spawn(start, BlockDisplay.class, d -> {
-                    shownToAll[0] |= !prepare(d, onlyFor);
+                    prepare(d, onlyFor);
                     d.setBlock(cosmetic.stringBlock().createBlockData());
                 });
-                part.string = new Piece(line, 0);
+                part.string = new Piece(line, 0, null);
                 spawned.add(line);
             }
             if (cosmetic.nameTag() != null) {
                 String text = Text.replace(cosmetic.nameTag(), "player", host.name());
                 TextDisplay tag = world.spawn(start, TextDisplay.class, d -> {
-                    shownToAll[0] |= !prepare(d, onlyFor);
+                    prepare(d, onlyFor);
                     d.setText(text);
                     d.setBillboard(Display.Billboard.CENTER);
                 });
-                part.tag = new Piece(tag, 0);
+                part.tag = new Piece(tag, 0, null);
                 spawned.add(tag);
             }
         } catch (RuntimeException e) {
@@ -376,7 +370,7 @@ public final class DisplayService implements Listener {
         }
         if (onlyFor != null) {
             for (Entity e : part.entities()) {
-                Visibility.revealOnlyTo(plugin, onlyFor, e, !shownToAll[0]);
+                Visibility.revealOnlyTo(plugin, onlyFor, e);
             }
         }
         place(rig.pose(host, tick), part, true);
@@ -384,21 +378,20 @@ public final class DisplayService implements Listener {
     }
 
     private static Transformation initial(DisplayCosmetic cosmetic, int side) {
-        if (cosmetic.category().isBody()) {
-            return BodyMath.transform(cosmetic.attachment(), cosmetic.scale(), side, 0);
-        }
-        float scale = cosmetic.scale();
-        return new Transformation(new Vector3f(), new Quaternionf(), new Vector3f(scale, scale, scale), new Quaternionf());
+        return cosmetic.category().isBody()
+                ? BodyMath.transform(cosmetic.attachment(), cosmetic.scale(), side, 0)
+                : BodyMath.scaled(cosmetic.scale());
     }
 
-    /** @return 본인 전용인데 기본으로 숨기지 못했으면 {@code false} */
-    private boolean prepare(Display display, Player onlyFor) {
+    private void prepare(Display display, Player onlyFor) {
         display.setPersistent(false);
         display.setTeleportDuration(2);
         display.setInterpolationDuration(MOTION_PERIOD);
         display.setShadowRadius(0);
         display.getPersistentDataContainer().set(key, PersistentDataType.BYTE, (byte) 1);
-        return onlyFor == null || Visibility.hideByDefault(display);
+        if (onlyFor != null) {
+            Visibility.hideByDefault(display);
+        }
     }
 
     // ── 위치 ─────────────────────────────────────
@@ -411,8 +404,9 @@ public final class DisplayService implements Listener {
     private void place(Pose pose, Part part, boolean snap) {
         DisplayCosmetic c = part.cosmetic;
         if (c.cycles() && tick % c.cycleTicks() == 0) {
+            ItemStack item = c.itemAt(tick).create(plugin.getLogger());
             for (Piece piece : part.pieces) {
-                ((ItemDisplay) piece.display).setItemStack(c.itemAt(tick).create(plugin.getLogger()));
+                ((ItemDisplay) piece.display).setItemStack(item);
             }
         }
         if (c.category().isBody()) {
@@ -460,23 +454,19 @@ public final class DisplayService implements Listener {
             part.phase = (part.phase + BodyMath.step(a, pose.moving())) % (Math.PI * 2);
         }
         boolean sendMotion = animate && (snap || tick % MOTION_PERIOD == 0);
-        Vec3 base = BodyMath.anchor(c.category()).plus(a.offset());
-        float pitch = pose.sneaking() ? BodyMath.SNEAK_LEAN_DEGREES : 0;
+        boolean sneaking = pose.sneaking();
+        float pitch = sneaking ? BodyMath.SNEAK_LEAN_DEGREES : 0;
+        Vector feet = pose.feet();
+        Vector right = pose.right();
+        Vector forward = pose.forward();
         for (Piece piece : part.pieces) {
-            Vec3 at = BodyMath.lean(BodyMath.side(base, piece.side), pose.sneaking());
-            Vector world = pose.feet().clone()
-                    .add(pose.right().clone().multiply(at.x()))
-                    .add(pose.forward().clone().multiply(at.z()))
-                    .add(new Vector(0, at.y(), 0));
-            piece.moveTo(world, pose.bodyYaw(), pitch);
-            Display display = piece.display;
-            if (hide != part.hidden) {
-                display.setInterpolationDelay(0);
-                display.setTransformation(hide ? BodyMath.hidden()
+            Vec3 at = sneaking ? piece.sneak : piece.stand;
+            piece.moveTo(feet.getX() + right.getX() * at.x() + forward.getX() * at.z(), feet.getY() + at.y(),
+                    feet.getZ() + right.getZ() * at.x() + forward.getZ() * at.z(), pose.bodyYaw(), pitch);
+            if (hide != part.hidden || sendMotion) {
+                piece.display.setInterpolationDelay(0);
+                piece.display.setTransformation(hide ? BodyMath.hidden()
                         : BodyMath.transform(a, c.scale(), piece.side, part.phase));
-            } else if (sendMotion) {
-                display.setInterpolationDelay(0);
-                display.setTransformation(BodyMath.transform(a, c.scale(), piece.side, part.phase));
             }
         }
         part.hidden = hide;
@@ -670,12 +660,12 @@ public final class DisplayService implements Listener {
             if (pieces.isEmpty() || !current.equals(world)) {
                 return false;
             }
-            for (Entity e : entities()) {
-                if (!e.isValid()) {
+            for (Piece piece : pieces) {
+                if (!piece.display.isValid()) {
                     return false;
                 }
             }
-            return true;
+            return (string == null || string.display.isValid()) && (tag == null || tag.display.isValid());
         }
 
         void hideFrom(CosmeticsCore plugin, Player viewer) {
@@ -716,6 +706,9 @@ public final class DisplayService implements Listener {
         final Display display;
         /** 0 = 한 개, 1 = 오른쪽, -1 = 왼쪽. */
         final int side;
+        /** 몸 장식이 서 있을 때 / 웅크렸을 때 붙는 자리 (발 기준 오른쪽/위/앞). 몸 장식이 아니면 {@code null}. */
+        final Vec3 stand;
+        final Vec3 sneak;
         private double x = Double.NaN;
         private double y;
         private double z;
@@ -724,16 +717,24 @@ public final class DisplayService implements Listener {
         /** 풍선 줄 길이. */
         double lastLength = -1;
 
-        Piece(Display display, int side) {
+        Piece(Display display, int side, DisplayCosmetic body) {
             this.display = display;
             this.side = side;
+            if (body != null && body.category().isBody()) {
+                stand = BodyMath.side(BodyMath.anchor(body.category()).plus(body.attachment().offset()), side);
+                sneak = BodyMath.lean(stand, true);
+            } else {
+                stand = null;
+                sneak = null;
+            }
         }
 
         /** @return 실제로 옮겼으면 {@code true} */
         boolean moveTo(Vector to, float yaw, float pitch) {
-            double nx = to.getX();
-            double ny = to.getY();
-            double nz = to.getZ();
+            return moveTo(to.getX(), to.getY(), to.getZ(), yaw, pitch);
+        }
+
+        boolean moveTo(double nx, double ny, double nz, float yaw, float pitch) {
             if (Math.abs(nx - x) < 1e-4 && Math.abs(ny - y) < 1e-4 && Math.abs(nz - z) < 1e-4
                     && Math.abs(yaw - this.yaw) < 0.05f && Math.abs(pitch - this.pitch) < 0.05f) {
                 return false;

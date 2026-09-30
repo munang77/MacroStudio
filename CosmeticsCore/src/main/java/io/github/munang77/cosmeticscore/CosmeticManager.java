@@ -64,6 +64,22 @@ public final class CosmeticManager {
         return data != null && data.hasUnlocked(cosmetic.id());
     }
 
+    /** 메뉴와 옷장에서 보여 주는 상태. */
+    public enum Status {
+        EQUIPPED, OWNED, BUYABLE, LOCKED
+    }
+
+    /** 착용 중 / 가짐 / 살 수 있음 / 잠김. */
+    public Status status(Player player, Cosmetic cosmetic) {
+        if (isEquipped(player, cosmetic)) {
+            return Status.EQUIPPED;
+        }
+        if (owns(player, cosmetic)) {
+            return Status.OWNED;
+        }
+        return cosmetic.price() > 0 ? Status.BUYABLE : Status.LOCKED;
+    }
+
     public int ownedCount(Player player, Collection<Cosmetic> cosmetics) {
         int owned = 0;
         for (Cosmetic c : cosmetics) {

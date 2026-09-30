@@ -9,6 +9,8 @@ import java.util.UUID;
 import io.github.munang77.cosmeticscore.CosmeticManager;
 import io.github.munang77.cosmeticscore.CosmeticsCore;
 import io.github.munang77.cosmeticscore.Messages;
+import io.github.munang77.cosmeticscore.PurchaseConfirm;
+import io.github.munang77.cosmeticscore.chat.ChatService;
 import io.github.munang77.cosmeticscore.cosmetic.Category;
 import io.github.munang77.cosmeticscore.cosmetic.Cosmetic;
 import io.github.munang77.cosmeticscore.cosmetic.DisplayCosmetic;
@@ -16,9 +18,7 @@ import io.github.munang77.cosmeticscore.cosmetic.HatCosmetic;
 import io.github.munang77.cosmeticscore.cosmetic.ParticleCosmetic;
 import io.github.munang77.cosmeticscore.cosmetic.TitleCosmetic;
 import io.github.munang77.cosmeticscore.display.DisplayService;
-import io.github.munang77.cosmeticscore.util.Visibility;
 import org.bukkit.Location;
-import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Interaction;
 import org.bukkit.entity.LivingEntity;
@@ -63,11 +63,7 @@ final class WardrobeSession {
     private int categoryIndex;
     float yaw;
     boolean rotating = true;
-    /** 우리가 플레이어를 옮기는 중 (텔레포트로 옷장이 닫히지 않게). */
-    boolean teleporting;
-    /** 두 번 눌러야 사지는 구매 확인. */
-    private String pendingPurchase;
-    private long pendingSince;
+    private final PurchaseConfirm confirm = new PurchaseConfirm();
     private final Host host = new Host();
 
     WardrobeSession(CosmeticsCore plugin, Player player, LivingEntity mannequin, Location view, Location origin,
@@ -115,46 +111,28 @@ final class WardrobeSession {
         } else {
             selected.put(category, list.get(next - 1));
         }
-        pendingPurchase = null;
+        confirm.reset();
         applyLook(category);
     }
 
     void cycleCategory(int delta) {
         categoryIndex = Math.floorMod(categoryIndex + delta, categories.size());
-        pendingPurchase = null;
+        confirm.reset();
     }
 
     /** 고른 것을 실제로 입는다. 없으면 이 카테고리를 벗고, 안 가진 것이면 두 번 눌러 산다. */
     boolean equip() {
         CosmeticManager manager = plugin.manager();
-        Messages msg = plugin.messages();
-        Category category = category();
         Cosmetic cosmetic = current();
         if (cosmetic == null) {
-            return manager.unequip(player, category, true);
+            return manager.unequip(player, category(), true);
         }
-        if (manager.isEquipped(player, cosmetic)) {
-            msg.send(player, "equipped", "name", cosmetic.name());
+        if (manager.status(player, cosmetic) == CosmeticManager.Status.BUYABLE
+                && (!confirm.confirm(plugin, player, cosmetic, "confirm-purchase-wardrobe")
+                || !manager.purchase(player, cosmetic))) {
             return false;
         }
-        if (!manager.owns(player, cosmetic)) {
-            if (cosmetic.price() <= 0) {
-                msg.send(player, "locked", "name", cosmetic.name());
-                return false;
-            }
-            long now = System.currentTimeMillis();
-            if (!cosmetic.id().equals(pendingPurchase) || now - pendingSince > 5000) {
-                pendingPurchase = cosmetic.id();
-                pendingSince = now;
-                msg.send(player, "confirm-purchase-wardrobe", "name", cosmetic.name(),
-                        "price", plugin.economy().format(cosmetic.price()));
-                return false;
-            }
-            pendingPurchase = null;
-            if (!manager.purchase(player, cosmetic)) {
-                return false;
-            }
-        }
+        // 잠긴 것은 equip 이 안내하고 거절한다
         return manager.equip(player, cosmetic);
     }
 
@@ -170,11 +148,9 @@ final class WardrobeSession {
             }
         }
         if (changed == null || changed == Category.TITLE) {
-            String name = player.getName();
-            if (selected.get(Category.TITLE) instanceof TitleCosmetic title) {
-                name = title.title() + " " + name;
-            }
-            mannequin.setCustomName(name);
+            String prefix = selected.get(Category.TITLE) instanceof TitleCosmetic title
+                    ? ChatService.prefixOf(title.title()) : "";
+            mannequin.setCustomName(prefix + player.getName());
             mannequin.setCustomNameVisible(true);
         }
         if (changed == null || changed.isDisplay()) {
@@ -182,18 +158,18 @@ final class WardrobeSession {
         }
     }
 
-    /** 매 틱: 마네킹을 돌리고 파티클을 뿌린다. */
+    /** 매 틱: 마네킹을 돌리고, 실제 파티클과 같은 간격으로 파티클을 뿌린다 (본인에게만). */
     void tick(long now) {
         if (rotating) {
             yaw = Location.normalizeYaw(yaw + TURN_PER_TICK);
         }
         Mannequins.face(mannequin, yaw);
-        if (selected.get(Category.PARTICLE) instanceof ParticleCosmetic particle && now % 2 == 0) {
-            int step = (int) (now / 2);
+        int interval = plugin.settings().particleInterval();
+        if (selected.get(Category.PARTICLE) instanceof ParticleCosmetic particle && now % interval == 0) {
+            int step = (int) (now / interval);
             if (particle.style().shouldRender(step)) {
-                Location base = mannequin.getLocation();
-                particle.style().render(base, yaw, step, rotating, false,
-                        point -> particle.spec().spawn(player, point, 1, 0, 0, step));
+                plugin.effects().drawParticles(particle, mannequin.getLocation(), yaw, step, rotating, false,
+                        () -> List.of(player));
             }
         }
     }
@@ -205,54 +181,40 @@ final class WardrobeSession {
         List<Cosmetic> list = plugin.registry().of(category);
         Cosmetic cosmetic = current();
         String position = (list.indexOf(cosmetic) + 1) + "/" + list.size();
-        if (info != null) {
-            info.setText(msg.get("wardrobe.header", "category", msg.category(category), "position", position)
-                    + "\n" + describe(cosmetic));
+        String header = msg.get("wardrobe.header", "category", msg.category(category), "position", position);
+        String info;
+        String equip;
+        if (cosmetic == null) {
+            info = msg.get("wardrobe.info-none");
+            equip = msg.get("wardrobe.button.take-off");
+        } else {
+            String price = plugin.economy().format(cosmetic.price());
+            CosmeticManager.Status status = plugin.manager().status(player, cosmetic);
+            String state = switch (status) {
+                case EQUIPPED -> msg.get("wardrobe.status.equipped");
+                case OWNED -> msg.get("wardrobe.status.owned");
+                case BUYABLE -> msg.get("wardrobe.status.price", "price", price);
+                case LOCKED -> msg.get("wardrobe.status.locked");
+            };
+            info = msg.get("wardrobe.info", "name", cosmetic.name(),
+                    "rarity", plugin.settings().rarity(cosmetic.rarity()).name(), "status", state);
+            equip = switch (status) {
+                case EQUIPPED -> msg.get("wardrobe.button.wearing");
+                case OWNED -> msg.get("wardrobe.button.equip");
+                case BUYABLE -> msg.get("wardrobe.button.buy", "price", price);
+                case LOCKED -> msg.get("wardrobe.button.locked");
+            };
+        }
+        if (this.info != null) {
+            this.info.setText(header + "\n" + info);
         }
         for (Button button : buttons) {
             if (button.action() == Action.EQUIP) {
-                button.label().setText(equipLabel(cosmetic));
+                button.label().setText(equip);
             } else if (button.action() == Action.ROTATE) {
                 button.label().setText(msg.get(rotating ? "wardrobe.button.rotate-on" : "wardrobe.button.rotate-off"));
             }
         }
-    }
-
-    private String describe(Cosmetic cosmetic) {
-        Messages msg = plugin.messages();
-        if (cosmetic == null) {
-            return msg.get("wardrobe.info-none");
-        }
-        CosmeticManager manager = plugin.manager();
-        String status;
-        if (manager.isEquipped(player, cosmetic)) {
-            status = msg.get("wardrobe.status.equipped");
-        } else if (manager.owns(player, cosmetic)) {
-            status = msg.get("wardrobe.status.owned");
-        } else if (cosmetic.price() > 0) {
-            status = msg.get("wardrobe.status.price", "price", plugin.economy().format(cosmetic.price()));
-        } else {
-            status = msg.get("wardrobe.status.locked");
-        }
-        return msg.get("wardrobe.info", "name", cosmetic.name(),
-                "rarity", plugin.settings().rarity(cosmetic.rarity()).name(), "status", status);
-    }
-
-    private String equipLabel(Cosmetic cosmetic) {
-        Messages msg = plugin.messages();
-        CosmeticManager manager = plugin.manager();
-        if (cosmetic == null) {
-            return msg.get("wardrobe.button.take-off");
-        }
-        if (manager.isEquipped(player, cosmetic)) {
-            return msg.get("wardrobe.button.wearing");
-        }
-        if (manager.owns(player, cosmetic)) {
-            return msg.get("wardrobe.button.equip");
-        }
-        return cosmetic.price() > 0
-                ? msg.get("wardrobe.button.buy", "price", plugin.economy().format(cosmetic.price()))
-                : msg.get("wardrobe.button.locked");
     }
 
     /** 누른 엔티티가 이 옷장의 버튼이면 그 버튼. */
@@ -265,11 +227,10 @@ final class WardrobeSession {
         return null;
     }
 
-    /** 이 옷장이 소환한 모든 엔티티. */
-    List<Entity> entities() {
-        List<Entity> out = new ArrayList<>(spawned);
-        out.add(mannequin);
-        return out;
+    /** 이 옷장이 소환한 것을 모두 지운다. */
+    void removeEntities() {
+        spawned.forEach(Entity::remove);
+        mannequin.remove();
     }
 
     /** 마네킹에 입히는 장식 (본인에게만 보인다). */
@@ -319,18 +280,5 @@ final class WardrobeSession {
         public Player onlyFor() {
             return player;
         }
-    }
-
-    /**
-     * 버튼·글자 공통: 저장하지 않고, 본인에게만 보인다.
-     *
-     * @return 기본으로 숨기지 못했으면 {@code false} (소환한 뒤 따로 숨긴다)
-     */
-    static boolean prepare(Entity entity) {
-        entity.setPersistent(false);
-        if (entity instanceof Display display) {
-            display.setBillboard(Display.Billboard.CENTER);
-        }
-        return Visibility.hideByDefault(entity);
     }
 }
