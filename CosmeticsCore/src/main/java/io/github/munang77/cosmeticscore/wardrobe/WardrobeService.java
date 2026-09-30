@@ -313,7 +313,13 @@ public final class WardrobeService implements Listener {
     }
 
     private static boolean passable(Block block) {
-        return !block.getType().isSolid();
+        return !block.getType().isSolid() && !trigger(block);
+    }
+
+    /** 마네킹이 서면 눌려 버리는 블록 (압력판, 철사 덫). 문이나 레드스톤 장치를 대신 작동시키지 않게 피한다. */
+    private static boolean trigger(Block block) {
+        String name = block.getType().name();
+        return name.endsWith("PRESSURE_PLATE") || name.equals("TRIPWIRE");
     }
 
     // ── 만들기 ───────────────────────────────────

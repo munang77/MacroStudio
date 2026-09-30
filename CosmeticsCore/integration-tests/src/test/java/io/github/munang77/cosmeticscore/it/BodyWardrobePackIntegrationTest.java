@@ -240,6 +240,13 @@ class BodyWardrobePackIntegrationTest {
             assertTrue(said(drain(p), "앞이 막혀"));
             world.getBlockAt(0, 120, 2).setType(Material.AIR);
         }
+        // 마네킹 자리에 압력판이 있으면 대신 밟지 않도록 열지 않는다
+        world.getBlockAt(0, 120, 3).setType(Material.STONE_PRESSURE_PLATE);
+        p.performCommand("cos 옷장");
+        assertFalse(plugin.wardrobe().isOpen(p), "압력판 위에는 마네킹을 세우지 않음");
+        world.getBlockAt(0, 120, 3).setType(Material.AIR);
+        drain(p);
+
         p.performCommand("cos 옷장");
         assertTrue(plugin.wardrobe().isOpen(p));
         server.getPluginManager().callEvent(new org.bukkit.event.entity.EntityDamageEvent(p,
