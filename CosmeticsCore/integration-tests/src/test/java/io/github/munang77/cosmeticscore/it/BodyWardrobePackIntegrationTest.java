@@ -75,11 +75,12 @@ class BodyWardrobePackIntegrationTest {
         return new ArrayList<>(world.getEntitiesByClass(ItemDisplay.class));
     }
 
-    /** 공중(빈 공간)에 세운 플레이어. */
+    /** 빈 공간 높은 곳에 선 플레이어 (발밑만 땅으로 친다). */
     private PlayerMock player(boolean op) {
         PlayerMock p = server.addPlayer();
         p.setOp(op);
         p.teleport(new Location(world, 0.5, 120, 0.5, 0, 0));
+        p.setOnGround(true);
         return p;
     }
 
@@ -225,6 +226,12 @@ class BodyWardrobePackIntegrationTest {
     @Test
     void wardrobeNeedsRoomAndClosesWhenHurt() {
         PlayerMock p = player(true);
+        // 공중에 떠 있으면 열지 않는다 (붙잡아 두면 서버가 날기로 보고 내보낼 수 있어서)
+        p.setOnGround(false);
+        p.performCommand("cos 옷장");
+        assertFalse(plugin.wardrobe().isOpen(p));
+        drain(p);
+        p.setOnGround(true);
         if (Material.STONE.isSolid()) {
             // MockBukkit 판마다 블록 성질을 모를 때가 있어, 알 때만 막힌 경우를 본다
             world.getBlockAt(0, 120, 2).setType(Material.STONE);
@@ -293,7 +300,102 @@ class BodyWardrobePackIntegrationTest {
         assertNull(mannequin());
     }
 
+    @Test
+    void pinningBackIsNotTreatedAsLeaving() {
+        PlayerMock admin = player(true);
+        admin.teleport(new Location(world, 30.5, 120, 30.5));
+        admin.performCommand("cos 옷장 설정");
+        PlayerMock p = player(false);
+        Location origin = new Location(world, -5, 120, -5);
+        p.teleport(origin);
+        p.performCommand("cos 옷장");
+        assertTrue(plugin.wardrobe().isOpen(p));
+        Location view = p.getLocation().clone();
+
+        // 움직이려 하면 서버가 제자리로 "순간이동" 시킨다: 이때 옷장이 닫히면 안 된다
+        Location to = view.clone();
+        to.setYaw(80);
+        server.getPluginManager().callEvent(new org.bukkit.event.player.PlayerTeleportEvent(p, view.clone().add(0.3, 0, 0),
+                to, org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.PLUGIN));
+        assertTrue(plugin.wardrobe().isOpen(p), "제자리로 돌리는 것은 떠나는 게 아님");
+
+        // 다른 곳으로 순간이동하면 닫히고, 원래 자리로 되돌리지 않는다
+        p.teleport(new Location(world, 200, 120, 200));
+        assertFalse(plugin.wardrobe().isOpen(p));
+        assertEquals(200, p.getLocation().getX(), 1e-3);
+    }
+
+    @Test
+    void blockedTeleportDoesNotLeaveABrokenWardrobe() {
+        PlayerMock admin = player(true);
+        admin.teleport(new Location(world, 30.5, 120, 30.5));
+        admin.performCommand("cos 옷장 설정");
+        server.getPluginManager().registerEvents(new org.bukkit.event.Listener() {
+            @org.bukkit.event.EventHandler
+            public void deny(org.bukkit.event.player.PlayerTeleportEvent event) {
+                event.setCancelled(true);
+            }
+        }, plugin);
+        PlayerMock p = player(false);
+        p.performCommand("cos 옷장");
+        assertFalse(plugin.wardrobe().isOpen(p), "옮기지 못하면 열지 않음");
+        assertNull(mannequin(), "마네킹이 남으면 안 됨");
+    }
+
+    @Test
+    void reloadClosesOpenWardrobes() {
+        PlayerMock p = player(true);
+        p.performCommand("cos 옷장");
+        assertTrue(plugin.wardrobe().isOpen(p));
+        plugin.reload();
+        assertFalse(plugin.wardrobe().isOpen(p));
+        assertNull(mannequin());
+    }
+
+    @Test
+    void oldConfigIsMigratedToTheNewMenuLayout() throws IOException {
+        Path file = plugin.getDataFolder().toPath().resolve("config.yml");
+        org.bukkit.configuration.file.YamlConfiguration old = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(file.toFile());
+        old.set("config-version", null);
+        old.set("menu.categories.backpack.slot", 11);
+        old.set("menu.categories.balloon.slot", 12);
+        old.set("menu.categories.backpack.icon", "BARREL");
+        old.set("wardrobe", null);
+        old.save(file.toFile());
+
+        plugin.reload();
+        assertEquals(12, plugin.settings().categorySlot(Category.BACKPACK));
+        assertEquals(16, plugin.settings().categorySlot(Category.BALLOON));
+        assertEquals(Material.BARREL, plugin.settings().categoryIcon(Category.BACKPACK), "아이콘은 그대로");
+        org.bukkit.configuration.file.YamlConfiguration now = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(file.toFile());
+        assertEquals(2, now.getInt("config-version"));
+        assertTrue(now.contains("wardrobe.enabled"), "새 설정이 파일에 채워져야 함");
+    }
+
+    @Test
+    void setWardrobeSpotKeepsUnsavedConfigEdits() throws IOException {
+        Path file = plugin.getDataFolder().toPath().resolve("config.yml");
+        // 관리자가 파일을 고치고 아직 리로드하지 않음
+        String edited = Files.readString(file).replace("send: false", "send: true");
+        Files.writeString(file, edited);
+        PlayerMock admin = player(true);
+        admin.performCommand("cos 옷장 설정");
+        String after = Files.readString(file);
+        assertTrue(after.contains("send: true"), "고친 내용이 사라지면 안 됨");
+        assertTrue(after.contains("location: " + world.getName() + ",") || after.contains("location: '" + world.getName()),
+                "옷장 자리가 저장돼야 함");
+    }
+
     // ── 리소스팩 ─────────────────────────────────
+
+    @Test
+    void otherPluginsPackResultsAreIgnored() {
+        PlayerMock p = player(false);
+        drain(p);
+        server.getPluginManager().callEvent(new org.bukkit.event.player.PlayerResourcePackStatusEvent(p,
+                java.util.UUID.randomUUID(), org.bukkit.event.player.PlayerResourcePackStatusEvent.Status.DECLINED));
+        assertTrue(drain(p).isEmpty());
+    }
 
     @Test
     void resourcePackIsBuiltWithModelsAndExtras() throws IOException {

@@ -28,13 +28,13 @@ public record Attachment(Vec3 offset, Vec3 rotation, Vec3 pivot, boolean mirror,
 
     /** 아무 설정도 없는 기본값. */
     public static final Attachment NONE = new Attachment(Vec3.ZERO, Vec3.ZERO, Vec3.ZERO, false,
-            Motion.NONE, 1, 0, 0, 0);
+            Motion.NONE, 1, 0, 0, 0.06);
 
     /** 카테고리마다 따로 적지 않았을 때 쓰는 움직임과 거울 여부. */
     public static Attachment defaults(Category category) {
         return switch (category) {
-            case WINGS -> new Attachment(Vec3.ZERO, Vec3.ZERO, Vec3.ZERO, true, Motion.FLAP, 1, 16, 20, 0);
-            case TAIL -> new Attachment(Vec3.ZERO, Vec3.ZERO, Vec3.ZERO, false, Motion.SWAY, 1, 14, 0, 0);
+            case WINGS -> new Attachment(Vec3.ZERO, Vec3.ZERO, Vec3.ZERO, true, Motion.FLAP, 1, 16, 20, 0.06);
+            case TAIL -> new Attachment(Vec3.ZERO, Vec3.ZERO, Vec3.ZERO, false, Motion.SWAY, 1, 14, 0, 0.06);
             default -> NONE;
         };
     }

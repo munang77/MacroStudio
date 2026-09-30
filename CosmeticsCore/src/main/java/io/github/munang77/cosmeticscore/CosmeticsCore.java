@@ -8,6 +8,7 @@ import java.util.logging.Level;
 
 import io.github.munang77.cosmeticscore.chat.ChatService;
 import io.github.munang77.cosmeticscore.command.CosmeticsCommand;
+import io.github.munang77.cosmeticscore.cosmetic.Category;
 import io.github.munang77.cosmeticscore.cosmetic.Cosmetic;
 import io.github.munang77.cosmeticscore.cosmetic.CosmeticRegistry;
 import io.github.munang77.cosmeticscore.crate.CrateService;
@@ -35,6 +36,9 @@ import org.bukkit.scheduler.BukkitTask;
 
 /** CosmeticsCore 본체. 다른 플러그인은 {@code CosmeticsCore.getPlugin(CosmeticsCore.class)} 로 접근한다. */
 public class CosmeticsCore extends JavaPlugin {
+
+    /** config.yml 형식 번호. 올리면 {@link #migrateConfig} 에서 예전 파일을 고친다. */
+    private static final int CONFIG_VERSION = 2;
 
     private final CosmeticRegistry registry = new CosmeticRegistry();
     private volatile Settings settings;
@@ -163,6 +167,8 @@ public class CosmeticsCore extends JavaPlugin {
         hats.clearCache();
         effects.start();
         pack.start();
+        // 열린 옷장은 예전 코스메틱 목록을 들고 있으므로 닫는다 (옷장 자리로 옮겨 간 사람은 돌려보냄)
+        wardrobe.start();
         for (Player player : getServer().getOnlinePlayers()) {
             manager.resync(player);
         }
@@ -171,6 +177,7 @@ public class CosmeticsCore extends JavaPlugin {
 
     private int loadFiles() {
         reloadConfig();
+        migrateConfig();
         settings = new Settings(getConfig(), getLogger());
         messages = new Messages(new File(getDataFolder(), "messages.yml"), getResource("messages.yml"));
 
@@ -190,6 +197,38 @@ public class CosmeticsCore extends JavaPlugin {
             }
         }
         return count;
+    }
+
+    /**
+     * 예전 config.yml 을 지금 형식으로 고친다. 2.1 에서 메인 메뉴가 6줄이 되고 카테고리가 늘어 칸 배치가 바뀌었으므로
+     * 카테고리 칸을 새 기본 배치로 옮기고 (아이콘은 그대로), 새 설정(옷장, 리소스팩 등)을 파일에 채워 넣는다.
+     */
+    private void migrateConfig() {
+        int version = getConfig().getInt("config-version", 1);
+        if (version >= CONFIG_VERSION) {
+            return;
+        }
+        File file = new File(getDataFolder(), "config.yml");
+        YamlConfiguration disk = YamlConfiguration.loadConfiguration(file);
+        for (Category category : Category.values()) {
+            String path = "menu.categories." + category.key();
+            disk.set(path + ".slot", category.defaultSlot());
+            if (!disk.contains(path + ".icon")) {
+                disk.set(path + ".icon", category.defaultIcon().name());
+            }
+        }
+        disk.set("config-version", CONFIG_VERSION);
+        if (getConfig().getDefaults() != null) {
+            disk.setDefaults(getConfig().getDefaults());
+            disk.options().copyDefaults(true);
+        }
+        try {
+            disk.save(file);
+            getLogger().info("config.yml 을 새 형식(" + CONFIG_VERSION + ")으로 바꿨습니다: 메뉴 칸 배치와 옷장·리소스팩 설정");
+        } catch (IOException e) {
+            getLogger().log(Level.WARNING, "config.yml 을 새 형식으로 저장하지 못했습니다.", e);
+        }
+        reloadConfig();
     }
 
     private Storage createStorage() {

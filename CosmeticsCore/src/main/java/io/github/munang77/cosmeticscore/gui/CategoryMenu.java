@@ -101,11 +101,7 @@ public final class CategoryMenu extends Menu {
                 .name(msg.get("menu.unequip-category.name", "category", categoryName))
                 .build());
         if (hasWardrobe()) {
-            inventory.setItem(WARDROBE, new ItemBuilder(Material.ARMOR_STAND)
-                    .name(msg.get("menu.wardrobe.name"))
-                    .lore(msg.list("menu.wardrobe.lore"))
-                    .hideTooltipExtras()
-                    .build());
+            inventory.setItem(WARDROBE, wardrobeButton());
         }
         fill();
     }

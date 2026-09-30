@@ -113,6 +113,15 @@ public abstract class Menu implements InventoryHolder {
         }
     }
 
+    /** 옷장 열기 버튼. */
+    protected ItemStack wardrobeButton() {
+        return new ItemBuilder(Material.ARMOR_STAND)
+                .name(plugin.messages().get("menu.wardrobe.name"))
+                .lore(plugin.messages().list("menu.wardrobe.lore"))
+                .hideTooltipExtras()
+                .build();
+    }
+
     /** "등급: 전설" 설명 줄. */
     protected String rarityLine(Cosmetic cosmetic) {
         return plugin.messages().get("menu.item.rarity", "rarity", plugin.settings().rarity(cosmetic.rarity()).name());

@@ -180,7 +180,7 @@ public final class CosmeticRegistry {
                 Math.max(0, Math.min(10, s.getDouble("animation-speed", def.speed()))),
                 Math.max(0, Math.min(180, s.getDouble("animation-angle", def.angle()))),
                 Math.max(-90, Math.min(90, s.getDouble("spread", def.spread()))),
-                Math.max(0, Math.min(2, s.getDouble("animation-height", 0.06))));
+                Math.max(0, Math.min(2, s.getDouble("animation-height", def.height()))));
     }
 
     /** {@code [x, y, z]} 세 숫자 (각각 절댓값 {@code max} 이하). */

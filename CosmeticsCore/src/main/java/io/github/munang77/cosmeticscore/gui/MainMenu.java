@@ -64,11 +64,7 @@ public final class MainMenu extends Menu {
         }
 
         if (settings.wardrobeEnabled()) {
-            inventory.setItem(Settings.WARDROBE_SLOT, new ItemBuilder(Material.ARMOR_STAND)
-                    .name(msg.get("menu.wardrobe.name"))
-                    .lore(msg.list("menu.wardrobe.lore"))
-                    .hideTooltipExtras()
-                    .build());
+            inventory.setItem(Settings.WARDROBE_SLOT, wardrobeButton());
         }
 
         boolean showOthers = manager.seesOthers(viewer);

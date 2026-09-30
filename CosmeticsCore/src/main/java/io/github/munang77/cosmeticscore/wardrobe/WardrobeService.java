@@ -1,11 +1,14 @@
 package io.github.munang77.cosmeticscore.wardrobe;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.logging.Level;
 
 import io.github.munang77.cosmeticscore.CosmeticsCore;
 import io.github.munang77.cosmeticscore.Messages;
@@ -21,6 +24,7 @@ import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Interaction;
 import org.bukkit.entity.LivingEntity;
@@ -153,9 +157,18 @@ public final class WardrobeService implements Listener {
         Location view;
         Location origin = null;
         if (fixed != null) {
+            if (settings.isDisabled(fixed.getWorld())) {
+                msg.send(player, "disabled-world");
+                return false;
+            }
             view = fixed;
             origin = player.getLocation();
         } else {
+            // 공중에 붙잡아 두면 서버가 "날기" 로 보고 내보낼 수 있다
+            if (!player.isOnGround() && !player.isFlying() && !player.isInWater()) {
+                msg.send(player, "wardrobe.busy");
+                return false;
+            }
             view = player.getLocation();
             view.setPitch(0);
         }
@@ -186,8 +199,13 @@ public final class WardrobeService implements Listener {
         buildButtons(session, stage);
         if (origin != null) {
             session.teleporting = true;
-            player.teleport(view);
+            boolean moved = player.teleport(view);
             session.teleporting = false;
+            if (!moved) {
+                // 다른 플러그인(지역 보호, 전투 중 등)이 옮기지 못하게 했다
+                end(session, false, "wardrobe.failed");
+                return false;
+            }
             hideOthers(session);
         }
         session.applyLook(null);
@@ -267,8 +285,17 @@ public final class WardrobeService implements Listener {
             value = String.format(Locale.ROOT, "%s,%.3f,%.3f,%.3f,%.1f,%.1f", at.getWorld().getName(),
                     at.getX(), at.getY(), at.getZ(), at.getYaw(), 0f);
         }
+        // saveConfig() 는 메모리의 설정 전체를 덮어써서, 관리자가 고치고 아직 리로드하지 않은 내용이 사라진다.
+        // 그래서 파일을 다시 읽어 이 값만 바꿔 쓴다 (주석은 그대로)
+        File file = new File(plugin.getDataFolder(), "config.yml");
+        YamlConfiguration disk = YamlConfiguration.loadConfiguration(file);
+        disk.set(LOCATION_PATH, value);
+        try {
+            disk.save(file);
+        } catch (IOException e) {
+            plugin.getLogger().log(Level.WARNING, "config.yml 에 옷장 자리를 저장하지 못했습니다.", e);
+        }
         plugin.getConfig().set(LOCATION_PATH, value);
-        plugin.saveConfig();
     }
 
     /** 서 있는 자리에서 열 때: 마네킹 자리와 가는 길이 막혀 있지 않은지. */
@@ -302,12 +329,8 @@ public final class WardrobeService implements Listener {
         return Visibility.hideByDefault(mannequin);
     }
 
-    /** 본인에게 보이게 하고, 기본으로 숨기지 못했으면 다른 사람에게서 하나씩 숨긴다. */
     private void reveal(Player owner, Entity entity, boolean hiddenByDefault) {
-        if (!hiddenByDefault) {
-            Visibility.hideFromOthers(plugin, entity, owner);
-        }
-        owner.showEntity(plugin, entity);
+        Visibility.revealOnlyTo(plugin, owner, entity, hiddenByDefault);
     }
 
     /** 마네킹 앞(플레이어 쪽)에 떠 있는 버튼들. 마네킹을 가리지 않게 양옆과 발치에 둔다. */
@@ -505,27 +528,31 @@ public final class WardrobeService implements Listener {
     public void onMove(PlayerMoveEvent event) {
         WardrobeSession session = sessions.get(event.getPlayer().getUniqueId());
         Location to = event.getTo();
-        if (session == null || to == null) {
+        if (session == null || to == null || atView(session, to)) {
             return;
         }
-        Location view = session.view;
-        if (to.getWorld() == view.getWorld() && Math.abs(to.getX() - view.getX()) < 0.01
-                && Math.abs(to.getY() - view.getY()) < 0.01 && Math.abs(to.getZ() - view.getZ()) < 0.01) {
-            return;
-        }
-        Location back = view.clone();
+        Location back = session.view.clone();
         back.setYaw(to.getYaw());
         back.setPitch(to.getPitch());
         event.setTo(back);
     }
 
-    /** 다른 곳으로 옮겨지면 옷장을 닫는다 (원래 자리로 되돌리지 않는다). */
+    /**
+     * 다른 곳으로 옮겨지면 옷장을 닫는다 (원래 자리로 되돌리지 않는다). 움직이려 할 때 {@link #onMove} 가 제자리로
+     * 돌려놓으면 서버가 그것을 순간이동으로 처리하므로, 옷장 자리로 가는 순간이동은 무시한다.
+     */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTeleport(PlayerTeleportEvent event) {
         WardrobeSession session = sessions.get(event.getPlayer().getUniqueId());
-        if (session != null && !session.teleporting) {
+        if (session != null && !session.teleporting && !atView(session, event.getTo())) {
             end(session, false, "wardrobe.closed");
         }
+    }
+
+    private static boolean atView(WardrobeSession session, Location to) {
+        Location view = session.view;
+        return to != null && to.getWorld() == view.getWorld() && Math.abs(to.getX() - view.getX()) < 0.01
+                && Math.abs(to.getY() - view.getY()) < 0.01 && Math.abs(to.getZ() - view.getZ()) < 0.01;
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

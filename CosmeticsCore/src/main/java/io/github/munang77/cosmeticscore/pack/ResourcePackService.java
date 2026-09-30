@@ -64,6 +64,8 @@ public final class ResourcePackService implements Listener {
     /** 리소스팩을 (다시) 만들고, 보낼 주소를 정한다. */
     public void start() {
         stop();
+        // 만들다 실패하면 예전 주소로 보내지 않게 먼저 비운다
+        url = null;
         try {
             build();
         } catch (IOException e) {
@@ -71,7 +73,6 @@ public final class ResourcePackService implements Listener {
             return;
         }
         Settings settings = plugin.settings();
-        url = null;
         if (!settings.packSend()) {
             return;
         }
@@ -253,7 +254,8 @@ public final class ResourcePackService implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onStatus(PlayerResourcePackStatusEvent event) {
-        if (url == null) {
+        // 다른 플러그인의 리소스팩 결과에는 답하지 않는다
+        if (url == null || !PACK_ID.equals(event.getID())) {
             return;
         }
         PlayerResourcePackStatusEvent.Status status = event.getStatus();

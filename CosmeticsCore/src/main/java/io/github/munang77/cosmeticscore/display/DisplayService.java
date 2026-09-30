@@ -375,12 +375,9 @@ public final class DisplayService implements Listener {
             return null;
         }
         if (onlyFor != null) {
-            if (shownToAll[0]) {
-                for (Entity e : part.entities()) {
-                    Visibility.hideFromOthers(plugin, e, onlyFor);
-                }
+            for (Entity e : part.entities()) {
+                Visibility.revealOnlyTo(plugin, onlyFor, e, !shownToAll[0]);
             }
-            part.showTo(plugin, onlyFor);
         }
         place(rig.pose(host, tick), part, true);
         return part;

@@ -4,6 +4,9 @@
 #  고친 뒤 /cos reload 로 적용하세요 (storage 는 서버를 다시 켜야 바뀝니다).
 # ─────────────────────────────────────────────
 
+# 설정 파일 형식 번호 (건드리지 마세요. 플러그인이 예전 설정을 고칠 때 씁니다)
+config-version: 2
+
 # 플레이어 데이터 저장 방식
 #   YAML   : plugins/CosmeticsCore/data/<uuid>.yml (기본, 서버 한 대)
 #   SQLITE : plugins/CosmeticsCore/data.db (파일 하나)
