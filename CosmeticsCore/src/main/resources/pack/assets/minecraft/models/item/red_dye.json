@@ -15,6 +15,18 @@
         "custom_model_data": 7130017
       },
       "model": "cosmeticscore:item/vanilla/red_dye"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130020
+      },
+      "model": "cosmeticscore:item/red_cube_balloon"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130021
+      },
+      "model": "cosmeticscore:item/vanilla/red_dye"
     }
   ]
 }

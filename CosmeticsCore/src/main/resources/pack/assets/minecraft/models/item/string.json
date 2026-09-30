@@ -15,6 +15,18 @@
         "custom_model_data": 7130010
       },
       "model": "cosmeticscore:item/vanilla/string"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130019
+      },
+      "model": "cosmeticscore:item/holy_robe"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130020
+      },
+      "model": "cosmeticscore:item/vanilla/string"
     }
   ]
 }

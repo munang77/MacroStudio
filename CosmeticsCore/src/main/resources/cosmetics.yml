@@ -99,6 +99,22 @@ hats:
     custom-model-data: 7130013
     rarity: rare
     price: 12000
+  chef_hat:
+    name: "&f셰프 모자"
+    lore:
+      - "&7주름이 잡힌 높은 요리사 모자"
+    material: PAPER
+    custom-model-data: 7130017
+    rarity: rare
+    price: 15000
+  navy_wizard_hat:
+    name: "&9&l밤하늘 마법사 모자"
+    lore:
+      - "&7은빛 띠를 두른 남색 고깔모자"
+    material: PAPER
+    custom-model-data: 7130018
+    rarity: epic
+    price: 30000
   # 리소스팩/머리 텍스처 예시
   # custom_crown:
   #   name: "&e커스텀 왕관"
@@ -258,8 +274,16 @@ waist:
     rarity: epic
     price: 28000
 
-# ── 상체 장식 : 목도리, 목걸이, 메달 (모델은 몸 가운데 기준)
+# ── 바디 : 몸에 입는 로브, 목도리, 메달 (모델은 몸 가운데 기준, 몸통은 모델 좌표 y 0.8~12.8)
 torso:
+  holy_robe:
+    name: "&f&l성기사 로브"
+    lore:
+      - "&7은빛 판금과 흰 망토"
+    material: STRING
+    custom-model-data: 7130019
+    rarity: legendary
+    price: 90000
   scarf:
     name: "&c빨간 목도리"
     lore:
@@ -300,6 +324,15 @@ balloons:
     custom-model-data: 7130016
     rarity: epic
     price: 20000
+  red_cube_balloon:
+    name: "&c빨간 네모 풍선"
+    lore:
+      - "&7마인크래프트다운 네모 풍선"
+    material: RED_DYE
+    custom-model-data: 7130020
+    scale: 0.9
+    rarity: rare
+    price: 12000
   rainbow_balloon:
     name: "&#FF5555무&#FFAA00지&#FFFF55개 &#55FF55풍&#55FFFF선"
     icon: WHITE_WOOL

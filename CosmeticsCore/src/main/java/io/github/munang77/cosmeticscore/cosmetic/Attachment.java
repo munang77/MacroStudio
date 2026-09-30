@@ -57,7 +57,8 @@ public record Attachment(Vec3 offset, Vec3 rotation, Vec3 pivot, boolean mirror,
             case WINGS -> new Slot(new Vec3(0, 1.25, -0.2), 1.0f, FLAPPING_PAIR);
             case TAIL -> new Slot(new Vec3(0, 0.72, -0.16), 1.0f, SWAYING);
             case WAIST -> new Slot(new Vec3(0, 0.78, 0), 1.0f, NONE);
-            case TORSO -> new Slot(new Vec3(0, 1.2, 0.15), 1.0f, NONE);
+            // 몸통 가운데 (허리·바디 모델은 몸 가운데를 기준으로 만든다)
+            case TORSO -> new Slot(new Vec3(0, 1.2, 0), 1.0f, NONE);
             case BALLOON -> new Slot(Vec3.ZERO, 0.7f, NONE);
             case PET -> new Slot(Vec3.ZERO, 0.5f, NONE);
             case HAT, PARTICLE, ARROW_TRAIL, KILL_EFFECT, KILL_MESSAGE, TITLE, CHAT_COLOR, JOIN_EFFECT -> null;

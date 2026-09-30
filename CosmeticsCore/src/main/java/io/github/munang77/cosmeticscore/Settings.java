@@ -2,6 +2,7 @@ package io.github.munang77.cosmeticscore;
 
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -66,6 +67,7 @@ public final class Settings {
     private final Material filler;
     private final Map<Category, Integer> categorySlots = new EnumMap<>(Category.class);
     private final Map<Category, Material> categoryIcons = new EnumMap<>(Category.class);
+    private final Set<Category> hiddenCategories = EnumSet.noneOf(Category.class);
 
     Settings(FileConfiguration c, Logger log) {
         for (String w : c.getStringList("disabled-worlds")) {
@@ -104,6 +106,14 @@ public final class Settings {
         lockedIcon = material(c.getString("menu.locked-icon", "GRAY_DYE"), "menu.locked-icon", log);
         filler = material(c.getString("menu.filler", "GRAY_STAINED_GLASS_PANE"), "menu.filler", log);
 
+        for (String name : c.getStringList("menu.hidden-categories")) {
+            Category hidden = Category.parse(name, null);
+            if (hidden == null) {
+                log.warning("[config.yml] menu.hidden-categories: 없는 카테고리입니다: " + name);
+            } else {
+                hiddenCategories.add(hidden);
+            }
+        }
         Set<Integer> used = new HashSet<>(Set.of(PROFILE_SLOT, WARDROBE_SLOT, CRATE_SLOT, TOGGLE_SLOT, UNEQUIP_ALL_SLOT));
         for (Category cat : Category.values()) {
             ConfigurationSection s = c.getConfigurationSection("menu.categories." + cat.key());
@@ -298,6 +308,11 @@ public final class Settings {
     /** @return 빈칸으로 두려면 {@code null} */
     public Material filler() {
         return filler;
+    }
+
+    /** 메뉴·옷장·뽑기에 보여 줄 카테고리인지 (menu.hidden-categories 에 없으면). */
+    public boolean isShown(Category category) {
+        return !hiddenCategories.contains(category);
     }
 
     public int categorySlot(Category category) {

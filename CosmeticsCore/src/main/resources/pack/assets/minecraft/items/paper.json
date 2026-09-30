@@ -35,6 +35,27 @@
           "type": "minecraft:model",
           "model": "minecraft:item/paper"
         }
+      },
+      {
+        "threshold": 7130017,
+        "model": {
+          "type": "minecraft:model",
+          "model": "cosmeticscore:item/chef_hat"
+        }
+      },
+      {
+        "threshold": 7130018,
+        "model": {
+          "type": "minecraft:model",
+          "model": "cosmeticscore:item/navy_wizard_hat"
+        }
+      },
+      {
+        "threshold": 7130019,
+        "model": {
+          "type": "minecraft:model",
+          "model": "minecraft:item/paper"
+        }
       }
     ]
   }

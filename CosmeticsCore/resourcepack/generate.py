@@ -66,18 +66,19 @@ class Model:
         self.swatches[name] = (x, y, size)
         return name
 
-    def _uv(self, swatch, width, height, flip=False):
+    def _uv(self, swatch, width, height, flip=False, stretch=False):
         sx, sy, size = self.swatches[swatch]
-        w = min(max(width, 0.5), size)
-        h = min(max(height, 0.5), size)
+        # 보통은 1 픽셀 = 1 텍셀로 잘라 쓰고, stretch 면 무늬(문장 등)가 통째로 보이게 견본 전체를 늘여 붙인다
+        w = size if stretch else min(max(width, 0.5), size)
+        h = size if stretch else min(max(height, 0.5), size)
         k = 16.0 / self.tex
         u1, v1, u2, v2 = sx * k, sy * k, (sx + w) * k, (sy + h) * k
         if flip:
             u1, u2 = u2, u1
         return [round(u1, 4), round(v1, 4), round(u2, 4), round(v2, 4)]
 
-    def box(self, frm, to, swatch, rotation=None, faces=None, name=None, skip=()):
-        """상자 하나. faces 로 면마다 다른 견본을 줄 수 있다."""
+    def box(self, frm, to, swatch, rotation=None, faces=None, name=None, skip=(), stretch=()):
+        """상자 하나. faces 로 면마다 다른 견본을, stretch 로 견본을 통째로 늘여 붙일 면을 줄 수 있다."""
         faces = faces or {}
         dx, dy, dz = (to[i] - frm[i] for i in range(3))
         sizes = {"north": (dx, dy), "south": (dx, dy), "east": (dz, dy), "west": (dz, dy),
@@ -87,7 +88,8 @@ class Model:
             if face in skip:
                 continue
             w, h = sizes[face]
-            el["faces"][face] = {"uv": self._uv(faces.get(face, swatch), w, h), "texture": "#0"}
+            el["faces"][face] = {"uv": self._uv(faces.get(face, swatch), w, h, stretch=face in stretch),
+                                 "texture": "#0"}
         if rotation:
             el["rotation"] = rotation
         self.elements.append(el)
@@ -576,8 +578,125 @@ def heart_balloon():
     return m
 
 
+# ── 사진 속 치장품: 셰프 모자, 밤하늘 마법사 모자, 성기사 로브(바디), 빨간 네모 풍선 ──
+
+
+def chef_hat():
+    m = Model("chef_hat", "minecraft:paper", 7130017, 64, kind="head")
+
+    def pleats(cv, x, y, size):
+        # 세로 주름: 밝은 면 · 보통 면 · 그늘 홈이 번갈아, 위로 갈수록 조금 밝게
+        for yy in range(size):
+            lift = 1.0 + (size - yy) * 0.006
+            for xx in range(size):
+                k = xx % 4
+                base = "FFFFFF" if k == 1 else "C3C8D0" if k == 3 else "EEF0F3"
+                cv.set(x + xx, y + yy, shade(hex_color(base), lift))
+
+    pleat = m.swatch("pleat", None, painter=pleats)
+    band = m.swatch("band", "E7E9EC", 0.03, 40, stripes=(4, 0.93))
+    top = m.swatch("top", "F7F8FA", 0.03, 41)
+    m.box((2, 13.8, 2), (14, 17.2, 14), band, name="band")
+    m.box((0.8, 17, 0.8), (15.2, 22.6, 15.2), pleat, faces={"up": top, "down": band}, name="puff")
+    m.box((1.6, 22.6, 1.6), (14.4, 25, 14.4), pleat, faces={"up": top}, name="puff_top")
+    m.box((3.2, 25, 3.2), (12.8, 25.8, 12.8), top, name="crown")
+    return m
+
+
+def navy_wizard_hat():
+    m = Model("navy_wizard_hat", "minecraft:paper", 7130018, 64, kind="head")
+    cloth = m.swatch("cloth", "3A4355", 0.08, 42)
+    dark = m.swatch("dark", "2A3140", 0.06, 43)
+
+    def wrap(cv, x, y, size):
+        # 붕대처럼 비스듬히 감은 은빛 띠
+        for yy in range(size):
+            for xx in range(size):
+                on = (xx + yy * 2) % 6 < 2
+                cv.set(x + xx, y + yy, hex_color("B8BFCB") if on else hex_color("E4E8EE"))
+
+    band = m.swatch("band", None, painter=wrap)
+    gold = m.swatch("gold", "D8B46A", 0.08, 44)
+    m.box((-2, 14.5, -2), (18, 15.4, 18), cloth, faces={"down": dark}, name="brim")
+    m.box((2.5, 15.4, 2.5), (13.5, 19.6, 13.5), cloth, name="cone1")
+    m.box((2.3, 15.4, 2.3), (13.7, 17.3, 13.7), band, name="band")
+    m.box((2.7, 17.9, 2.7), (13.3, 18.9, 13.3), band, name="band2")
+    m.box((4, 19.6, 4.5), (12, 23.6, 12.5), cloth, name="cone2")
+    m.box((5.5, 23.6, 6), (10.5, 27.2, 11), cloth, name="cone3")
+    m.box((7, 24.4, 5.75), (9, 26.4, 6.05), gold, name="patch")
+    m.box((6.5, 26.7, 7.5), (9.5, 30, 10.5), cloth, rotation=rotation("x", 22.5, (8, 27, 9)), name="cone4")
+    m.box((7.2, 29, 9.5), (8.8, 32, 11), dark, rotation=rotation("x", 45, (8, 29.5, 10)), name="tip")
+    return m
+
+
+def holy_robe():
+    """성기사 로브 (바디): 몸통을 감싸는 흰 판금, 어깨받이, 앞뒤로 늘어진 천. 몸 가운데 기준, 몸통은 y 0.8~12.8."""
+    m = Model("holy_robe", "minecraft:string", 7130019, 64)
+
+    def plates(cv, x, y, size):
+        for yy in range(size):
+            for xx in range(size):
+                c = hex_color("EEF1F5")
+                if yy % 4 == 3:
+                    c = hex_color("C2C9D4")
+                elif yy % 4 == 0:
+                    c = hex_color("FAFBFD")
+                cv.set(x + xx, y + yy, c)
+
+    plate = m.swatch("plate", None, painter=plates)
+    trim = m.swatch("trim", "AEB6C3", 0.05, 45)
+
+    def tabard_face(cv, x, y, size):
+        cv.noise_rect(x, y, x + size, y + size, hex_color("F4F5F8"), 0.03, 46)
+        for i in range(size):
+            cv.set(x, y + i, hex_color("C9A24E"))
+            cv.set(x + size - 1, y + i, hex_color("C9A24E"))
+        # 가운데 위쪽 화살표 문양
+        for i in range(3, 12):
+            cv.set(x + 7, y + i, hex_color("8E97A6"))
+            cv.set(x + 8, y + i, hex_color("8E97A6"))
+        for i in range(4):
+            cv.set(x + 7 - i, y + 3 + i, hex_color("8E97A6"))
+            cv.set(x + 8 + i, y + 3 + i, hex_color("8E97A6"))
+
+    tabard = m.swatch("tabard", None, painter=tabard_face)
+    cloth = m.swatch("cloth", "E9ECF1", 0.04, 47, stripes=(5, 0.95))
+    m.box((3.6, 1.0, 5.5), (12.4, 12.5, 10.5), plate, name="chest")
+    m.box((3.4, 0.2, 5.3), (12.6, 1.6, 10.7), trim, name="belt")
+    for x0, x1 in ((1.8, 5.2), (10.8, 14.2)):
+        m.box((x0, 9.8, 5.0), (x1, 12.9, 11.0), plate, faces={"up": trim}, name="shoulder")
+        m.box((x0 + 0.3, 8.6, 5.3), (x1 - 0.3, 9.8, 10.7), trim, name="shoulder_edge")
+    m.box((5.2, -8.5, 4.8), (10.8, 1.4, 5.4), cloth, faces={"north": tabard}, stretch=("north",),
+          name="tabard_front")
+    m.box((3.9, -10.2, 10.5), (12.1, 12.4, 11.2), cloth, faces={"south": tabard}, stretch=("south",),
+          name="cape_back")
+    return m
+
+
+def red_cube_balloon():
+    m = Model("red_cube_balloon", "minecraft:red_dye", 7130020, 64, kind="float")
+
+    def mottled(cv, x, y, size):
+        import random
+        rng = random.Random(48)
+        for yy in range(size):
+            for xx in range(size):
+                r = rng.random()
+                c = "C5222B" if r < 0.55 else "A8171F" if r < 0.8 else "DE3B3F"
+                cv.set(x + xx, y + yy, hex_color(c))
+
+    red = m.swatch("red", None, painter=mottled)
+    knot = m.swatch("knot", "B51C24", 0.08, 49)
+    m.box((2, 3, 2), (14, 15, 14), red, name="balloon")
+    m.box((6.5, 1.2, 6.5), (9.5, 3, 9.5), knot, name="knot")
+    m.box((3.8, 1.8, 6.8), (6.4, 3, 9.2), knot, name="knot_left")
+    m.box((9.6, 1.8, 6.8), (12.2, 3, 9.2), knot, name="knot_right")
+    return m
+
+
 MODELS = [angel_wing, demon_wing, butterfly_wing, fox_tail, cat_tail, dragon_tail, belt_pouch, waist_katana,
-          scarf, medal, top_hat, witch_hat, bunny_ears, cape, adventurer_backpack, heart_balloon]
+          scarf, medal, top_hat, witch_hat, bunny_ears, cape, adventurer_backpack, heart_balloon,
+          chef_hat, navy_wizard_hat, holy_robe, red_cube_balloon]
 
 
 # ── 리소스팩 쓰기 ─────────────────────────────────────

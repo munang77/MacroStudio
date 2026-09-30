@@ -294,6 +294,25 @@ class BodyWardrobePackIntegrationTest {
     }
 
     @Test
+    void hiddenCategoriesLeaveOnlyHatBodyBalloon() {
+        plugin.getConfig().set("menu.hidden-categories", java.util.List.of("wings", "backpack", "tail", "waist", "pet",
+                "particle", "arrow_trail", "kill_effect", "kill_message", "title", "chat_color", "join_effect"));
+        plugin.saveConfig();
+        plugin.reload();
+        PlayerMock p = player(true);
+        p.setOp(false);
+        new MainMenu(plugin, p).open();
+        var top = p.getOpenInventory().getTopInventory();
+        assertEquals(plugin.settings().categoryIcon(Category.HAT), top.getItem(plugin.settings().categorySlot(Category.HAT)).getType());
+        assertEquals(plugin.settings().categoryIcon(Category.TORSO), top.getItem(plugin.settings().categorySlot(Category.TORSO)).getType());
+        assertNotEquals(Material.ELYTRA, top.getItem(plugin.settings().categorySlot(Category.WINGS)).getType(), "날개는 숨김");
+        for (Cosmetic c : plugin.crates().candidates(p)) {
+            assertTrue(c.category() == Category.HAT || c.category() == Category.TORSO || c.category() == Category.BALLOON,
+                    "뽑기에도 숨긴 카테고리가 나오면 안 됨: " + c.id());
+        }
+    }
+
+    @Test
     void disablingPluginSendsWardrobeUsersBack() {
         PlayerMock admin = player(true);
         admin.teleport(new Location(world, 50.5, 120, 50.5));

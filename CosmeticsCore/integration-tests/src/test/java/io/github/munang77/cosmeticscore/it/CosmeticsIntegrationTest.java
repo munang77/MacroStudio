@@ -87,7 +87,7 @@ class CosmeticsIntegrationTest {
     @Test
     void enablesWithAllBundledCosmetics() {
         assertTrue(plugin.isEnabled());
-        assertEquals(74, plugin.registry().all().size());
+        assertEquals(78, plugin.registry().all().size());
         for (Category c : Category.values()) {
             assertFalse(plugin.registry().of(c).isEmpty(), c + " 기본 코스메틱 없음");
         }
@@ -557,7 +557,7 @@ class CosmeticsIntegrationTest {
         Files.writeString(plugin.getDataFolder().toPath().resolve("cosmetics.yml"), "hats: [broken\n");
         p.performCommand("cos reload");
         assertTrue(said(drain(p), "형식이 잘못돼"));
-        assertEquals(74, plugin.registry().all().size());
+        assertEquals(78, plugin.registry().all().size());
     }
 
     @Test

@@ -33,6 +33,9 @@ public final class MainMenu extends Menu {
         inventory.setItem(Settings.PROFILE_SLOT, profile());
 
         for (Category category : Category.values()) {
+            if (!settings.isShown(category)) {
+                continue;
+            }
             String name = msg.category(category);
             List<Cosmetic> all = plugin.registry().of(category);
             Cosmetic equipped = manager.equipped(viewer, category);
@@ -84,6 +87,9 @@ public final class MainMenu extends Menu {
         Messages msg = plugin.messages();
         List<String> lore = new ArrayList<>();
         for (Category category : Category.values()) {
+            if (!plugin.settings().isShown(category)) {
+                continue;
+            }
             Cosmetic equipped = plugin.manager().equipped(viewer, category);
             lore.add(msg.get("menu.profile.line",
                     "category", msg.category(category),
@@ -106,7 +112,7 @@ public final class MainMenu extends Menu {
     protected void click(int slot, ClickType click) {
         Settings settings = plugin.settings();
         for (Category category : Category.values()) {
-            if (settings.categorySlot(category) == slot) {
+            if (settings.isShown(category) && settings.categorySlot(category) == slot) {
                 sound("ui.button.click", 1.2f);
                 openLater(new CategoryMenu(plugin, viewer, category, 0));
                 return;

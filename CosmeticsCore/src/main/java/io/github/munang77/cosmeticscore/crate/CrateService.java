@@ -40,7 +40,7 @@ public final class CrateService {
     public List<Cosmetic> candidates(Player player) {
         List<Cosmetic> pool = new ArrayList<>();
         for (Cosmetic c : plugin.registry().all()) {
-            if (c.inCrate() && !plugin.manager().owns(player, c)) {
+            if (c.inCrate() && plugin.settings().isShown(c.category()) && !plugin.manager().owns(player, c)) {
                 pool.add(c);
             }
         }

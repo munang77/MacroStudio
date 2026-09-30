@@ -27,6 +27,24 @@
         "custom_model_data": 7130014
       },
       "model": "cosmeticscore:item/vanilla/paper"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130017
+      },
+      "model": "cosmeticscore:item/chef_hat"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130018
+      },
+      "model": "cosmeticscore:item/navy_wizard_hat"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7130019
+      },
+      "model": "cosmeticscore:item/vanilla/paper"
     }
   ]
 }

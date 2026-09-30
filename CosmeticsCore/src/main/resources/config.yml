@@ -139,6 +139,12 @@ menu:
   locked-icon: GRAY_DYE
   # 메뉴 빈칸을 채우는 아이템 (비워 두면 빈칸)
   filler: GRAY_STAINED_GLASS_PANE
+  # 메뉴·옷장·뽑기에서 숨길 카테고리. 예) 모자·바디·풍선만 쓰려면:
+  #   hidden-categories: [wings, backpack, tail, waist, pet, particle, arrow_trail, kill_effect,
+  #                       kill_message, title, chat_color, join_effect]
+  # (hat, wings, backpack, tail, waist, torso=바디, balloon, pet, particle, arrow_trail,
+  #  kill_effect, kill_message, title, chat_color, join_effect)
+  hidden-categories: []
   # 메인 메뉴(6줄, 0~53번 칸)의 카테고리 버튼 위치와 아이콘
   # 4번(내 정보), 38번(옷장), 42번(뽑기), 48번(보기 설정), 50번(모두 해제)은 비워 두세요
   categories:

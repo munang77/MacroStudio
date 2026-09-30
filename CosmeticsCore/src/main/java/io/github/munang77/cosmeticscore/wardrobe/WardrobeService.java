@@ -145,7 +145,7 @@ public final class WardrobeService implements Listener {
         }
         List<Category> categories = new ArrayList<>();
         for (Category c : Category.values()) {
-            if (c.isWardrobe() && !plugin.registry().of(c).isEmpty()) {
+            if (c.isWardrobe() && settings.isShown(c) && !plugin.registry().of(c).isEmpty()) {
                 categories.add(c);
             }
         }

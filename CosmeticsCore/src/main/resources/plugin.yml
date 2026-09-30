@@ -3,7 +3,7 @@ version: '${project.version}'
 main: io.github.munang77.cosmeticscore.CosmeticsCore
 api-version: '1.21'
 author: munang77
-description: 모자, 날개, 백팩, 꼬리, 허리·상체 장식, 풍선, 펫, 파티클, 화살 궤적, 킬 이펙트, 칭호, 채팅 색, 입장 효과와 옷장, 3D 모델 리소스팩을 제공하는 코스메틱 플러그인
+description: 모자, 날개, 백팩, 꼬리, 허리 장식, 바디, 풍선, 펫, 파티클, 화살 궤적, 킬 이펙트, 칭호, 채팅 색, 입장 효과와 옷장, 3D 모델 리소스팩을 제공하는 코스메틱 플러그인
 softdepend: [PlaceholderAPI, Vault]
 
 commands:
